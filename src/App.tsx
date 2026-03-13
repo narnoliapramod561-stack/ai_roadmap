@@ -15,6 +15,7 @@ import { GraderPage } from './pages/GraderPage'
 import { AuthPage } from './pages/AuthPage'
 
 import { ProgressPage } from './pages/ProgressPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 function App() {
   return (
@@ -27,12 +28,13 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/map" element={<MapPage />} />
-          <Route path="/quiz" element={<QuizPage />} />
-          <Route path="/planner" element={<PlannerPage />} />
-            <Route path="/revision" element={<RevisionPage />} />
-            <Route path="/tutor" element={<TutorPage />} />
-            <Route path="/grader" element={<GraderPage />} />
+          <Route path="/quiz/:topicId?" element={<QuizPage />} />
+          <Route path="/planner/:topicId?" element={<PlannerPage />} />
+          <Route path="/revision" element={<RevisionPage />} />
+          <Route path="/tutor/:topicId?" element={<TutorPage />} />
+          <Route path="/grader/:topicId?" element={<GraderPage />} />
           <Route path="/progress" element={<ProgressPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

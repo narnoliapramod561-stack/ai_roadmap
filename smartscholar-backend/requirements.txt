@@ -1,8 +1,8 @@
 fastapi
 uvicorn
 supabase
-google-generativeai
 pdfplumber
 python-dotenv
 pydantic
 python-multipart
+groq

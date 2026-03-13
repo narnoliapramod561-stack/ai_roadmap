@@ -10,18 +10,18 @@ import { MessageSquare, PlayCircle, Repeat2, PenTool, Sparkles, Loader2 } from '
 import { useStudyStore } from '@/stores/useStudyStore'
 
 const getMasteryColor = (mastery: number) => {
-  if (mastery >= 80) return { bg: '#bbf7d0', text: '#166534', border: '#22c55e' }
-  if (mastery >= 40) return { bg: '#fef08a', text: '#854d0e', border: '#eab308' }
-  if (mastery > 0) return { bg: '#fecaca', text: '#991b1b', border: '#ef4444' }
-  return { bg: '#f3f4f6', text: '#374151', border: '#9ca3af' }
+  if (mastery >= 80) return { bg: 'rgba(0, 245, 212, 0.15)', text: '#00F5D4', border: '#00F5D4' }
+  if (mastery >= 40) return { bg: 'rgba(185, 167, 255, 0.15)', text: '#B9A7FF', border: '#B9A7FF' }
+  if (mastery > 0) return { bg: 'rgba(255, 0, 229, 0.1)', text: '#FF00E5', border: '#FF00E5' }
+  return { bg: 'rgba(255, 255, 255, 0.03)', text: 'rgba(255, 255, 255, 0.4)', border: 'rgba(255, 255, 255, 0.1)' }
 }
 
 export const MapPage = () => {
   const storeRoadmap = useStudyStore(state => state.roadmap)
   const currentMaterial = useStudyStore(state => state.currentMaterial)
   
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([])
   const [selectedNode, setSelectedNode] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -41,19 +41,23 @@ export const MapPage = () => {
           style: { 
             background: colors.bg, 
             color: colors.text, 
-            border: `2px solid ${colors.border}`, 
-            borderRadius: '12px', 
-            fontWeight: 'bold', 
-            padding: '12px 20px', 
-            fontSize: '14px', 
-            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+            border: `1px solid ${colors.border}40`, 
+            borderRadius: '16px', 
+            fontWeight: '900', 
+            padding: '14px 24px', 
+            fontSize: '12px', 
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            boxShadow: `0 0 20px ${colors.border}20`,
+            backdropFilter: 'blur(10px)'
           }
         }
       })
 
       const flowEdges = currentMaterial?.knowledge_graph?.edges?.map((edge: any) => ({
         ...edge,
-        markerEnd: { type: MarkerType.ArrowClosed }
+        style: { stroke: '#ffffff20', strokeWidth: 2 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: '#ffffff20' }
       })) || []
 
       setNodes(flowNodes)
@@ -70,9 +74,9 @@ export const MapPage = () => {
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full space-y-4">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium">Loading your adaptive roadmap...</p>
+      <div className="flex flex-col items-center justify-center h-full space-y-6">
+        <Loader2 className="w-12 h-12 animate-spin text-primary" />
+        <p className="text-white/40 font-black uppercase tracking-[0.3em] text-[10px]">Quantizing Knowledge Layers...</p>
       </div>
     )
   }
@@ -80,26 +84,26 @@ export const MapPage = () => {
   if (nodes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-6">
-        <Sparkles className="w-12 h-12 text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-bold">No Syllabus Analyzed Yet</h2>
-        <p className="text-muted-foreground max-w-sm mt-2 mb-6 text-sm">
-          Upload your syllabus in the Dashboard or Upload page to generate your AI-powered knowledge map.
+        <Sparkles className="w-16 h-16 text-primary mb-6 animate-pulse" />
+        <h2 className="text-4xl font-black uppercase italic tracking-tighter">No Syllabus <br /><span className="text-primary">Detected</span></h2>
+        <p className="text-white/40 max-w-sm mt-4 mb-10 text-sm font-light">
+          Upload your curriculum to generate the high-fidelity 3D Knowledge Map.
         </p>
         <Link to="/upload">
-          <Button size="lg">Start Analysis</Button>
+          <Button size="lg" className="bg-primary text-black font-black uppercase tracking-widest px-10 rounded-2xl h-16 hover:scale-105 transition-transform">Initialize Analysis</Button>
         </Link>
       </div>
     )
   }
 
   return (
-    <div className="h-[calc(100vh-100px)] w-full relative">
-      <div className="absolute top-4 left-4 z-10 bg-background/80 backdrop-blur-md p-4 rounded-xl border border-primary/20 shadow-lg max-w-[240px]">
-        <h2 className="font-bold flex items-center gap-2 text-primary">
-          <Sparkles className="w-4 h-4" /> Smart Knowledge Map
+    <div className="h-[calc(100vh-140px)] w-full relative">
+      <div className="absolute top-6 left-6 z-10 glass p-6 rounded-[24px] border-white/5 shadow-2xl max-w-[280px]">
+        <h2 className="font-black flex items-center gap-3 text-primary uppercase text-xs tracking-widest">
+          <Sparkles className="w-4 h-4 text-glow-teal" /> Knowledge Map
         </h2>
-        <p className="text-[10px] text-muted-foreground mt-1">
-          Each node is a concept extracted from your syllabus. Color shows current AI mastery.
+        <p className="text-[9px] text-white/30 mt-3 font-bold uppercase tracking-widest leading-relaxed">
+          Spatial concept visualization. Node intensity represents AI-validated mastery.
         </p>
       </div>
 
@@ -110,50 +114,50 @@ export const MapPage = () => {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         fitView
-        className="bg-muted/10"
+        className="bg-transparent"
       >
-        <Background gap={20} size={1} />
-        <Controls />
+        <Background gap={30} size={1} color="rgba(0, 245, 212, 0.05)" />
+        <Controls className="glass !border-white/10 !bg-transparent rounded-lg overflow-hidden" />
       </ReactFlow>
 
       {selectedNode && (
-        <Card className="absolute top-4 right-4 z-10 w-80 shadow-2xl border-primary/20 animate-in slide-in-from-right duration-300">
-          <CardHeader className="pb-3 bg-muted/30">
+        <Card className="absolute top-6 right-6 z-10 w-80 glass-card rounded-[32px] border-white/10 animate-in slide-in-from-right duration-500 overflow-hidden shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]">
+          <CardHeader className="pb-4 bg-white/[0.02] border-b border-white/5">
             <div className="flex justify-between items-start">
-              <Badge variant={selectedNode.data.difficulty === 'hard' ? 'destructive' : 'secondary'}>
-                {selectedNode.data.difficulty.toUpperCase()}
+              <Badge className={`${selectedNode.data.difficulty === 'hard' ? 'bg-red-500/20 text-red-500' : 'bg-primary/20 text-primary'} border-none text-[8px] font-black uppercase tracking-widest`}>
+                {selectedNode.data.difficulty}
               </Badge>
-              <button onClick={() => setSelectedNode(null)} className="text-muted-foreground hover:text-foreground">✕</button>
+              <button onClick={() => setSelectedNode(null)} className="text-white/20 hover:text-white transition-colors">✕</button>
             </div>
-            <CardTitle className="text-lg pt-2">{selectedNode.data.label}</CardTitle>
+            <CardTitle className="text-xl pt-2 font-black tracking-tight">{selectedNode.data.label}</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs font-semibold">
+          <CardContent className="space-y-6 pt-6">
+            <div className="space-y-3">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-40">
                 <span>AI Mastery</span>
                 <span className="text-primary">{selectedNode.data.mastery}%</span>
               </div>
-              <Progress value={selectedNode.data.mastery} className="h-1.5" />
+              <Progress value={selectedNode.data.mastery} className="h-1 bg-white/5" />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-2">
-              <Link to="/tutor" className="w-full">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <Link to={`/tutor/${selectedNode.id}`} className="w-full">
+                <Button variant="outline" size="sm" className="w-full h-10 text-[9px] font-black uppercase tracking-widest border-white/5 hover:bg-primary hover:text-black transition-all rounded-xl">
                   <MessageSquare className="w-3 h-3 mr-2" /> Explain
                 </Button>
               </Link>
-              <Link to="/quiz" className="w-full">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+              <Link to={`/quiz/${selectedNode.id}`} className="w-full">
+                <Button variant="outline" size="sm" className="w-full h-10 text-[9px] font-black uppercase tracking-widest border-white/5 hover:bg-primary hover:text-black transition-all rounded-xl">
                   <PlayCircle className="w-3 h-3 mr-2" /> Quiz
                 </Button>
               </Link>
-              <Link to="/planner" className="w-full">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+              <Link to={`/planner/${selectedNode.id}`} className="w-full">
+                <Button variant="outline" size="sm" className="w-full h-10 text-[9px] font-black uppercase tracking-widest border-white/5 hover:bg-primary hover:text-black transition-all rounded-xl">
                   <Repeat2 className="w-3 h-3 mr-2" /> Guide
                 </Button>
               </Link>
-              <Link to="/grader" className="w-full">
-                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+              <Link to={`/grader/${selectedNode.id}`} className="w-full">
+                <Button variant="outline" size="sm" className="w-full h-10 text-[9px] font-black uppercase tracking-widest border-white/5 hover:bg-primary hover:text-black transition-all rounded-xl">
                   <PenTool className="w-3 h-3 mr-2" /> Practice
                 </Button>
               </Link>

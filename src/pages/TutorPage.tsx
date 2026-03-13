@@ -4,11 +4,22 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
+import { useStudyStore } from '@/stores/useStudyStore'
 
 export const TutorPage = () => {
+  const { topicId } = useParams()
+  const roadmap = useStudyStore(state => state.roadmap)
+  const topic = topicId ? roadmap.find(t => t.id === topicId) : null
+
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about your topics!" }
+    { 
+      role: 'assistant', 
+      content: topic 
+        ? `Hi! I'm your AI tutor. Let's study **${topic.label}** together. What questions do you have about this topic?`
+        : "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about your topics!" 
+    }
   ])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -17,22 +28,29 @@ export const TutorPage = () => {
     if (!input.trim() || isTyping) return
     
     const userMessage = input.trim()
+    const context = topic ? `Currently studying: ${topic.label}. ${topic.difficulty} difficulty.` : ""
     const newMessages = [...messages, { role: 'user', content: userMessage }]
     setMessages(newMessages)
     setInput('')
     setIsTyping(true)
     
     try {
-      const response = await api.chatWithTutor(userMessage)
+      const response = await api.chatWithTutor(userMessage, context)
       setMessages([...newMessages, { 
         role: 'assistant', 
         content: response.response 
       }])
-    } catch (error) {
-      console.error(error)
+    } catch (error: any) {
+      console.error('Tutor error:', error)
+      const errorMessage = error.message?.includes('network')
+        ? "Connection error. Please check your internet and try again."
+        : error.message?.includes('timeout')
+        ? "Request timed out. The server might be busy. Please try again."
+        : error.message || "Sorry, I encountered an error. Please try again later."
+      
       setMessages([...newMessages, { 
         role: 'assistant', 
-        content: "Sorry, I encountered an error. Please try again later." 
+        content: `⚠️ ${errorMessage}` 
       }])
     } finally {
       setIsTyping(false)
