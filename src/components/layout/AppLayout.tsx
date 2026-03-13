@@ -1,9 +1,16 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, Navigate } from 'react-router-dom'
 import { Navbar } from './Navbar'
 import { Sidebar } from './Sidebar'
 import { FloatingActions } from './FloatingActions'
+import { useUserStore } from '@/stores/useUserStore'
 
 export const AppLayout = () => {
+  const user = useUserStore((state) => state.user)
+
+  if (!user) {
+    return <Navigate to="/auth" replace />
+  }
+
   return (
     <div className="min-h-screen bg-background font-sans antialiased text-foreground">
       <Navbar />
@@ -17,3 +24,4 @@ export const AppLayout = () => {
     </div>
   )
 }
+

@@ -12,6 +12,8 @@ import { PlannerPage } from './pages/PlannerPage'
 import { RevisionPage } from './pages/RevisionPage'
 import { TutorPage } from './pages/TutorPage'
 import { GraderPage } from './pages/GraderPage'
+import { AuthPage } from './pages/AuthPage'
+
 import { ProgressPage } from './pages/ProgressPage'
 
 function App() {
@@ -19,7 +21,9 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/auth" element={<AuthPage />} />
         <Route element={<AppLayout />}>
+
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/map" element={<MapPage />} />

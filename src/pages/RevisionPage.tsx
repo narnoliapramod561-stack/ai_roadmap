@@ -1,19 +1,24 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Repeat2, Check, Frown, ThumbsUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-
-const mockQueue = [
-  { id: 1, topic: "Gauss Law", lastReviewed: "2 days ago", nextDue: "Today" },
-  { id: 2, topic: "Ampere Law", lastReviewed: "5 days ago", nextDue: "Today" }
-]
+import { useStudyStore } from '@/stores/useStudyStore'
 
 export const RevisionPage = () => {
-  const [queue, setQueue] = useState(mockQueue)
+  const storeQueue = useStudyStore(state => state.revisionQueue)
+  const [queue, setQueue] = useState(storeQueue)
 
-  const handleReview = (id: number) => {
+  useEffect(() => {
+    setQueue(storeQueue)
+  }, [storeQueue])
+
+  const handleReview = (id: string, score: number) => {
     setQueue(prev => prev.filter(q => q.id !== id))
+    // In a real scenario, this would call api.updateMastery
+    console.log(`Topic ${id} reviewed with score ${score}`)
   }
+
+
 
   return (
     <div className="max-w-3xl mx-auto space-y-8">
@@ -37,26 +42,29 @@ export const RevisionPage = () => {
               </div>
               <div className="relative z-10 space-y-6">
                 <div>
-                  <h3 className="text-xl font-semibold mb-1">{item.topic}</h3>
+                  <h3 className="text-xl font-semibold mb-1">{item.label}</h3>
                   <div className="text-sm text-muted-foreground flex gap-4">
-                    <span>Last reviewed: {item.lastReviewed}</span>
+                    <span>Algorithm Mastery: {item.mastery}%</span>
+                    <span>•</span>
+                    <span>Next review: 24h</span>
                   </div>
                 </div>
 
                 <div className="space-y-3 pt-4 border-t border-muted">
-                  <p className="text-sm font-medium mb-2">How easy was recalling this topic?</p>
+                  <p className="text-sm font-medium mb-2">How well do you recall this topic?</p>
                   <div className="flex flex-wrap gap-3">
-                    <Button onClick={() => handleReview(item.id)} className="bg-emerald-500 hover:bg-emerald-600 shadow-sm flex-1">
+                    <Button onClick={() => handleReview(item.id, 5)} className="bg-emerald-500 hover:bg-emerald-600 shadow-sm flex-1">
                       <Check className="w-4 h-4 mr-2" /> Easy (4d)
                     </Button>
-                    <Button onClick={() => handleReview(item.id)} variant="outline" className="flex-1">
+                    <Button onClick={() => handleReview(item.id, 4)} variant="outline" className="flex-1">
                       <ThumbsUp className="w-4 h-4 mr-2 text-yellow-500" /> Good (2d)
                     </Button>
-                    <Button onClick={() => handleReview(item.id)} variant="outline" className="flex-1">
+                    <Button onClick={() => handleReview(item.id, 2)} variant="outline" className="flex-1">
                       <Frown className="w-4 h-4 mr-2 text-red-500" /> Hard (1d)
                     </Button>
                   </div>
                 </div>
+
               </div>
             </motion.div>
           )) : (

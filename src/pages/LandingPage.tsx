@@ -32,17 +32,18 @@ export const LandingPage = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link to="/dashboard" className="w-full sm:w-auto">
+            <Link to="/auth" className="w-full sm:w-auto">
               <Button size="lg" className="w-full text-lg h-14 px-8 rounded-xl shadow-xl shadow-primary/20 font-bold group">
-                Try Live Demo <Rocket className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                Get Started <Rocket className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <Link to="/upload" className="w-full sm:w-auto">
+            <Link to="/auth" className="w-full sm:w-auto">
               <Button size="lg" variant="outline" className="w-full text-lg h-14 px-8 rounded-xl border-primary/20 hover:bg-primary/5 font-bold">
-                <Upload className="mr-2 w-5 h-5" /> Upload Material
+                <Upload className="mr-2 w-5 h-5" /> Upload Syllabus
               </Button>
             </Link>
           </div>
+
         </motion.div>
 
         {/* Floating Feature Preview */}
@@ -149,11 +150,12 @@ export const LandingPage = () => {
       <section className="py-24 px-6 border-t border-border/50">
         <div className="max-w-3xl mx-auto text-center space-y-8 bg-primary/5 rounded-[40px] p-12 border border-primary/10">
           <h2 className="text-4xl font-black">Ready to master your syllabus?</h2>
-          <Link to="/dashboard">
+          <Link to="/auth">
             <Button size="lg" className="h-16 px-10 text-xl font-black rounded-2xl shadow-2xl shadow-primary/20">
-             Get Started Free
+             Start Your Journey
             </Button>
           </Link>
+
         </div>
       </section>
 

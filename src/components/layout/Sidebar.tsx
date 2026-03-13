@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useStudyStore } from '@/stores/useStudyStore'
+import { useUserStore } from '@/stores/useUserStore'
 import { Badge } from '@/components/ui/badge'
 
 const navItems = [
@@ -29,6 +30,8 @@ const navItems = [
 export const Sidebar = () => {
   const location = useLocation()
   const studyStore = useStudyStore()
+  const user = useUserStore(state => state.user)
+
 
   return (
     <aside className="w-64 border-r bg-muted/20 h-[calc(100vh-4rem)] sticky top-16 hidden md:flex flex-col">
@@ -64,14 +67,17 @@ export const Sidebar = () => {
         })}
       </div>
       <div className="p-4 border-t">
-        <div className="rounded-xl bg-orange-500/10 p-4 border border-orange-500/20">
-          <div className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-1">Focus Mode</div>
-          <p className="text-xs text-muted-foreground mb-3">Distraction-free learning</p>
-          <button className="w-full text-xs bg-orange-500 text-white font-medium py-1.5 rounded shadow-sm hover:bg-orange-600 transition">
-            Start Session
+        <div className="rounded-xl bg-primary/5 p-4 border border-primary/20">
+          <div className="text-sm font-bold text-primary flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4" /> Focus: {user?.subject || 'Learning'}
+          </div>
+          <p className="text-[10px] text-muted-foreground mb-3">{user?.className || 'Target Class'}</p>
+          <button className="w-full text-xs bg-primary text-primary-foreground font-bold py-2 rounded-lg shadow-md shadow-primary/20 hover:bg-primary/90 transition-all">
+            Start Study Streak
           </button>
         </div>
       </div>
+
     </aside>
   )
 }

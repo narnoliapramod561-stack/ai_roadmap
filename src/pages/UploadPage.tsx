@@ -1,16 +1,26 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { UploadCloud, File, Network, PlayCircle, Calendar, PenTool } from 'lucide-react'
+import { UploadCloud, File, Network, PlayCircle, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { api } from '@/lib/api'
+import { useStudyStore } from '@/stores/useStudyStore'
+import { useUserStore } from '@/stores/useUserStore'
 
 export const UploadPage = () => {
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [status, setStatus] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const [isComplete, setIsComplete] = useState(false)
+  const [uploadResult, setUploadResult] = useState<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  const setMaterial = useStudyStore(state => state.setMaterial)
+  const setRoadmap = useStudyStore(state => state.setRoadmap)
+  const user = useUserStore(state => state.user)
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -18,35 +28,75 @@ export const UploadPage = () => {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    startUploadMock()
+    const file = e.dataTransfer.files[0]
+    if (file) startRealUpload(file)
   }
 
-  const startUploadMock = () => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) startRealUpload(file)
+  }
+
+  const startRealUpload = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF files are supported.')
+      return
+    }
+
     setIsUploading(true)
-    let p = 0
-    const interval = setInterval(() => {
-      p += 2
-      setProgress(p)
+    setError(null)
+    setProgress(10)
+    setStatus('Reading PDF content...')
 
-      if (p < 30) setStatus('Extracting topics from PDF...')
-      else if (p < 60) setStatus('Mapping syllabus structure...')
-      else if (p < 90) setStatus('Building knowledge graph...')
-      else setStatus('Finalizing adaptive roadmap...')
+    try {
+      const result = await api.uploadMaterial(file, user?.id)
+      setProgress(50)
+      setStatus('AI analyzing syllabus...')
+      
+      const interval = setInterval(() => {
+        setProgress(prev => {
+          if (prev >= 90) return 90
+          return prev + 1
+        })
+      }, 1000)
 
-      if (p >= 100) {
-        clearInterval(interval)
-        setIsUploading(false)
-        setIsComplete(true)
-      }
-    }, 50)
+      setMaterial(result.material_id, result.analysis)
+      setRoadmap(result.analysis.knowledge_graph.nodes)
+      setUploadResult(result)
+      
+      clearInterval(interval)
+      setProgress(100)
+      setIsUploading(false)
+      setIsComplete(true)
+    } catch (err: any) {
+      console.error("Upload Error:", err)
+      setError(err.message || 'Failed to upload material. Please ensure your PDF is readable.')
+      setStatus('Upload failed.')
+      setIsUploading(false)
+    }
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      <input 
+        type="file" 
+        className="hidden" 
+        ref={fileInputRef} 
+        onChange={handleFileChange}
+        accept=".pdf"
+      />
+      
       <div>
         <h1 className="text-3xl font-bold tracking-tight">📁 Upload Material</h1>
         <p className="text-muted-foreground mt-1">Drag and drop your syllabus or notes to generate a study system.</p>
       </div>
+
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive rounded-xl border border-destructive/20 animate-in fade-in slide-in-from-top-2">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <p className="text-sm font-medium">{error}</p>
+        </div>
+      )}
 
       {!isComplete ? (
         <Card className="border-dashed border-2 border-muted hover:border-primary/50 transition-colors bg-muted/10">
@@ -56,6 +106,7 @@ export const UploadPage = () => {
             onDrop={handleDrop}
           >
             {!isUploading ? (
+
               <div className="text-center space-y-4">
                 <div className="mx-auto w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center">
                   <UploadCloud className="w-10 h-10 text-primary" />
@@ -63,10 +114,10 @@ export const UploadPage = () => {
                 <div>
                   <h3 className="text-xl font-semibold">Upload PDF / Notes</h3>
                   <p className="text-sm text-muted-foreground mx-auto max-w-sm mt-2">
-                    Drag and drop here, or browse your files. We support PDF, DOCX, and TXT (Max 50MB).
+                    Drag and drop here, or browse your files. We support PDF (Max 50MB).
                   </p>
                 </div>
-                <Button size="lg" className="mt-4" onClick={startUploadMock}>Browse Files</Button>
+                <Button size="lg" className="mt-4" onClick={() => fileInputRef.current?.click()}>Browse Files</Button>
               </div>
             ) : (
               <div className="text-center space-y-6 w-full max-w-md">
@@ -93,56 +144,49 @@ export const UploadPage = () => {
               <File className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-semibold">Electromagnetic Theory.pdf processed!</h3>
-              <p className="text-sm">We generated 3 core topics and 12 subtopics.</p>
+              <h3 className="font-semibold">{uploadResult?.analysis?.total_topics} core topics extracted!</h3>
+              <p className="text-sm">We've generated a full knowledge graph for your syllabus.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Generated Topic Card */}
-            <Card className="shadow-md border-t-4 border-t-primary">
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="px-2 py-1 text-xs font-semibold bg-orange-100 text-orange-700 rounded dark:bg-orange-500/20 dark:text-orange-400">
-                    Difficulty: Hard
+            {uploadResult?.analysis?.knowledge_graph?.nodes?.slice(0, 6).map((node: any) => (
+              <Card key={node.id} className="shadow-md border-t-4 border-t-primary">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="px-2 py-1 text-xs font-semibold bg-primary/10 text-primary rounded">
+                      Difficulty: {node.difficulty}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground font-medium">3 Subtopics</div>
-                </div>
-                <CardTitle className="text-lg">Electromagnetic Theory</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <ul className="text-sm space-y-2 text-muted-foreground list-disc pl-4">
-                  <li>Maxwell Equations</li>
-                  <li>Gauss Law</li>
-                  <li>Ampere Law</li>
-                </ul>
-                <div className="grid grid-cols-2 gap-2 pt-4 border-t">
-                  <Link to="/map" className="w-full">
-                    <Button variant="outline" size="sm" className="w-full text-xs">
-                      <Network className="w-3 h-3 mr-1" /> View Map
-                    </Button>
-                  </Link>
-                  <Link to="/quiz" className="w-full">
-                    <Button variant="outline" size="sm" className="w-full text-xs">
-                      <PlayCircle className="w-3 h-3 mr-1" /> Quiz Me
-                    </Button>
-                  </Link>
-                  <Link to="/planner" className="w-full">
-                    <Button variant="outline" size="sm" className="w-full text-xs">
-                      <Calendar className="w-3 h-3 mr-1" /> Add Plan
-                    </Button>
-                  </Link>
-                  <Link to="/grader" className="w-full">
-                    <Button variant="outline" size="sm" className="w-full text-xs">
-                      <PenTool className="w-3 h-3 mr-1" /> Practice
-                    </Button>
-                  </Link>
-                </div>
-              </CardContent>
-            </Card>
+                  <CardTitle className="text-lg">{node.label}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-2 pt-4 border-t">
+                    <Link to="/map" className="w-full">
+                      <Button variant="outline" size="sm" className="w-full text-xs">
+                        <Network className="w-3 h-3 mr-1" /> View Map
+                      </Button>
+                    </Link>
+                    <Link to="/quiz" className="w-full">
+                      <Button variant="outline" size="sm" className="w-full text-xs">
+                        <PlayCircle className="w-3 h-3 mr-1" /> Quiz Me
+                      </Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="flex justify-center">
+            <Link to="/map">
+              <Button size="lg" className="gap-2">
+                Explore Full Knowledge Map <Network className="w-5 h-5" />
+              </Button>
+            </Link>
           </div>
         </motion.div>
       )}
+
     </div>
   )
 }

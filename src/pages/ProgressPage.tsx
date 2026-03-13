@@ -84,7 +84,7 @@ export const ProgressPage = () => {
                 <BarChart data={roadmap} layout="vertical" margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#333" opacity={0.2} />
                   <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} width={120} />
+                  <YAxis dataKey="label" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} width={120} />
                   <Tooltip 
                     cursor={{ fill: 'transparent' }} 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 

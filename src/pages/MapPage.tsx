@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { ReactFlow, Background, Controls, MarkerType, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -6,40 +6,91 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Link } from 'react-router-dom'
-import { MessageSquare, PlayCircle, Repeat2, PenTool, Sparkles } from 'lucide-react'
+import { MessageSquare, PlayCircle, Repeat2, PenTool, Sparkles, Loader2 } from 'lucide-react'
+import { useStudyStore } from '@/stores/useStudyStore'
 
-const initialNodes = [
-  { id: '1', position: { x: 300, y: 20 },  data: { label: 'Electromagnetic Theory', mastery: 65, difficulty: 'hard' },   style: { background: '#fef08a', color: '#854d0e', border: '2px solid #eab308', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '2', position: { x: 80, y: 160 },  data: { label: 'Maxwell Equations', mastery: 42, difficulty: 'hard' },         style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '3', position: { x: 520, y: 160 }, data: { label: 'Gauss Law', mastery: 85, difficulty: 'medium' },               style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '4', position: { x: 80, y: 310 },  data: { label: 'Ampere Law', mastery: 30, difficulty: 'hard' },                style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '5', position: { x: 300, y: 310 }, data: { label: 'Faraday\'s Law', mastery: 0, difficulty: 'hard' },             style: { background: '#f3f4f6', color: '#374151', border: '2px solid #9ca3af', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '6', position: { x: 520, y: 310 }, data: { label: 'Electric Potential', mastery: 72, difficulty: 'medium' },      style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '7', position: { x: 80, y: 460 },  data: { label: 'Biot-Savart Law', mastery: 15, difficulty: 'hard' },           style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '8', position: { x: 300, y: 460 }, data: { label: 'Wave Equations', mastery: 0, difficulty: 'hard' },             style: { background: '#f3f4f6', color: '#374151', border: '2px solid #9ca3af', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-  { id: '9', position: { x: 520, y: 460 }, data: { label: 'Capacitance', mastery: 88, difficulty: 'easy' },               style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
-]
-
-const initialEdges = [
-  { id:'e1-2', source:'1', target:'2', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e1-3', source:'1', target:'3', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e2-4', source:'2', target:'4', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e2-5', source:'2', target:'5', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e3-6', source:'3', target:'6', animated: true },
-  { id:'e4-7', source:'4', target:'7', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e5-8', source:'5', target:'8', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e6-9', source:'6', target:'9', markerEnd:{type:MarkerType.ArrowClosed} },
-  { id:'e3-5', source:'3', target:'5', markerEnd:{type:MarkerType.ArrowClosed}, strokeDasharray: '5,5' },
-]
+const getMasteryColor = (mastery: number) => {
+  if (mastery >= 80) return { bg: '#bbf7d0', text: '#166534', border: '#22c55e' }
+  if (mastery >= 40) return { bg: '#fef08a', text: '#854d0e', border: '#eab308' }
+  if (mastery > 0) return { bg: '#fecaca', text: '#991b1b', border: '#ef4444' }
+  return { bg: '#f3f4f6', text: '#374151', border: '#9ca3af' }
+}
 
 export const MapPage = () => {
-  const [nodes, , onNodesChange] = useNodesState(initialNodes)
-  const [edges, , onEdgesChange] = useEdgesState(initialEdges)
+  const storeRoadmap = useStudyStore(state => state.roadmap)
+  const currentMaterial = useStudyStore(state => state.currentMaterial)
+  
+  const [nodes, setNodes, onNodesChange] = useNodesState([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [selectedNode, setSelectedNode] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    if (storeRoadmap.length > 0) {
+      // Map store data to ReactFlow format
+      const flowNodes = storeRoadmap.map((node: any, index: number) => {
+        const colors = getMasteryColor(node.mastery || 0)
+        return {
+          id: node.id,
+          position: node.position || { x: 300, y: index * 100 + 50 },
+          data: { 
+            label: node.label, 
+            mastery: node.mastery || 0, 
+            difficulty: node.difficulty || 'medium' 
+          },
+          style: { 
+            background: colors.bg, 
+            color: colors.text, 
+            border: `2px solid ${colors.border}`, 
+            borderRadius: '12px', 
+            fontWeight: 'bold', 
+            padding: '12px 20px', 
+            fontSize: '14px', 
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+          }
+        }
+      })
+
+      const flowEdges = currentMaterial?.knowledge_graph?.edges?.map((edge: any) => ({
+        ...edge,
+        markerEnd: { type: MarkerType.ArrowClosed }
+      })) || []
+
+      setNodes(flowNodes)
+      setEdges(flowEdges)
+      setIsLoading(false)
+    } else {
+      setIsLoading(false)
+    }
+  }, [storeRoadmap, currentMaterial])
 
   const onNodeClick = useCallback((_: any, node: any) => {
     setSelectedNode(node)
   }, [])
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full space-y-4">
+        <Loader2 className="w-10 h-10 animate-spin text-primary" />
+        <p className="text-muted-foreground font-medium">Loading your adaptive roadmap...</p>
+      </div>
+    )
+  }
+
+  if (nodes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center px-6">
+        <Sparkles className="w-12 h-12 text-muted-foreground mb-4" />
+        <h2 className="text-2xl font-bold">No Syllabus Analyzed Yet</h2>
+        <p className="text-muted-foreground max-w-sm mt-2 mb-6 text-sm">
+          Upload your syllabus in the Dashboard or Upload page to generate your AI-powered knowledge map.
+        </p>
+        <Link to="/upload">
+          <Button size="lg">Start Analysis</Button>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="h-[calc(100vh-100px)] w-full relative">
@@ -96,9 +147,9 @@ export const MapPage = () => {
                   <PlayCircle className="w-3 h-3 mr-2" /> Quiz
                 </Button>
               </Link>
-              <Link to="/revision" className="w-full">
+              <Link to="/planner" className="w-full">
                 <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
-                  <Repeat2 className="w-3 h-3 mr-2" /> Review
+                  <Repeat2 className="w-3 h-3 mr-2" /> Guide
                 </Button>
               </Link>
               <Link to="/grader" className="w-full">

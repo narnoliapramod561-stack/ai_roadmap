@@ -1,103 +1,101 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
+import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
-
-const mockQuestions = [
-  {
-    id: 1,
-    question: "Which of the following is the correct mathematical statement for Gauss's Law in electrostatics?",
-    options: [
-      "∮ E · dA = μ₀ I_enc",
-      "∮ E · dA = Q_enc / ε₀",
-      "∮ B · dA = 0",
-      "∮ E · dl = -dΦ_B / dt"
-    ],
-    correct: 1,
-    explanation: "Gauss's Law states that the electric flux through any closed surface is proportional to the enclosed electric charge.",
-    reasoning: [
-      "Identified core concept: electric flux through a closed surface",
-      "Option B matches Gauss's Law definition — flux = Q_enc / ε₀",
-      "Option A describes Ampere's Law (magnetic field ↔ current)",
-      "Option C describes Gauss's Law for magnetism",
-      "Topic weight: High. Required for Maxwell Eq #1"
-    ]
-  },
-  {
-    id: 2,
-    question: "What happens to the electric field inside a hollow charged conductor?",
-    options: [
-      "It is maximum at the center",
-      "It is zero everywhere inside",
-      "It depends on the radius",
-      "It increases linearly"
-    ],
-    correct: 1,
-    explanation: "Inside a conductor, all excess charge resides on the surface. By Gauss's Law, the field inside is zero.",
-    reasoning: [
-      "Conductor property: static equilibrium",
-      "Charges repel to surface",
-      "Encosed charge in any internal volume is 0",
-      "Conclusion: E = 0"
-    ]
-  },
-  {
-    id: 3,
-    question: "The unit of Electric Flux is:",
-    options: [
-      "Volt",
-      "Newton/Coulomb",
-      "Volt-meter",
-      "Weber"
-    ],
-    correct: 2,
-    explanation: "Electric flux (Φ) = E · A. Since E is V/m and A is m², Φ = (V/m) * m² = Vm.",
-    reasoning: [
-      "Flux formula: E * Area",
-      "Units: (N/C) * m^2 or (V/m) * m^2",
-      "Simplified unit: Volt-meter (Vm)"
-    ]
-  }
-]
+import { Link } from 'react-router-dom'
+import { api } from '@/lib/api'
+import { useStudyStore } from '@/stores/useStudyStore'
 
 export const QuizPage = () => {
+  const [questions, setQuestions] = useState<any[]>([])
   const [currentIdx, setCurrentIdx] = useState(0)
   const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [timeLeft, setTimeLeft] = useState(30)
   const [score, setScore] = useState(0)
   const [isFinished, setIsFinished] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [quizId, setQuizId] = useState<string | null>(null)
 
-  const question = mockQuestions[currentIdx]
+  const roadmap = useStudyStore(state => state.roadmap)
+  const currentTopic = roadmap[0] // Default to first topic for demo
 
   useEffect(() => {
-    if (timeLeft > 0 && !isSubmitted && !isFinished) {
+    const loadQuiz = async () => {
+      if (!currentTopic) {
+        setIsLoading(false)
+        return
+      }
+      try {
+        const result = await api.generateQuiz(currentTopic.id)
+        setQuestions(result.questions)
+        setQuizId(result.quiz_id)
+      } catch (error) {
+        console.error(error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadQuiz()
+  }, [currentTopic])
+
+  const question = questions[currentIdx]
+
+  useEffect(() => {
+    if (timeLeft > 0 && !isSubmitted && !isFinished && !isLoading) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
       return () => clearTimeout(timer)
     }
-  }, [timeLeft, isSubmitted, isFinished])
+  }, [timeLeft, isSubmitted, isFinished, isLoading])
 
-  const handleSubmit = () => {
-    if (selectedOption === null) return
+  const handleSubmit = async () => {
+    if (selectedOption === null || !quizId || !currentTopic) return
     setIsSubmitted(true)
+    
     if (selectedOption === question.correct) {
       setScore(s => s + 1)
     }
   }
 
-  const handleNext = () => {
-    if (currentIdx < mockQuestions.length - 1) {
+  const handleNext = async () => {
+    if (currentIdx < questions.length - 1) {
       setCurrentIdx(currentIdx + 1)
       setSelectedOption(null)
       setIsSubmitted(false)
       setTimeLeft(30)
     } else {
+      if (quizId && currentTopic) {
+        const userAnswers = questions.map((_, i) => i === currentIdx ? selectedOption : -1)
+        await api.submitQuiz(quizId, userAnswers as number[], currentTopic.id)
+      }
       setIsFinished(true)
     }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <Loader2 className="w-10 h-10 text-primary animate-spin" />
+        <p className="text-muted-foreground font-medium">AI generating personalized quiz...</p>
+      </div>
+    )
+  }
+
+  if (!currentTopic && !isLoading) {
+    return (
+      <div className="text-center py-20 px-6">
+        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+        <h2 className="text-2xl font-bold">No Material Found</h2>
+        <p className="text-muted-foreground mb-6">Please upload a syllabus first to generate study quizzes.</p>
+        <Link to="/upload">
+          <Button>Go to Upload</Button>
+        </Link>
+      </div>
+    )
   }
 
   if (isFinished) {
@@ -108,18 +106,20 @@ export const QuizPage = () => {
             <Sparkles className="w-10 h-10 text-primary" />
           </div>
           <h1 className="text-4xl font-extrabold tracking-tight">Quiz Complete!</h1>
-          <p className="text-xl text-muted-foreground">You scored {score} out of {mockQuestions.length}</p>
+          <p className="text-xl text-muted-foreground">You scored {score} out of {questions.length}</p>
         </div>
         
         <Card className="p-6 border-primary/20 bg-primary/5">
-          <div className="text-lg font-medium mb-2">Topic Mastery: Gauss's Law</div>
-          <Progress value={(score/mockQuestions.length)*100} className="h-3 mb-4" />
+          <div className="text-lg font-medium mb-2">Topic Mastery: {currentTopic?.label}</div>
+          <Progress value={(score/questions.length)*100} className="h-3 mb-4" />
           <p className="text-sm text-muted-foreground">Based on your results, we've updated your Knowledge Map.</p>
         </Card>
 
         <div className="flex gap-4 justify-center">
           <Button size="lg" onClick={() => window.location.reload()}>Retry Quiz</Button>
-          <Button size="lg" variant="outline" onClick={() => window.location.href='/dashboard'}>Go to Dashboard</Button>
+          <Link to="/map">
+            <Button size="lg" variant="outline">View Progress Map</Button>
+          </Link>
         </div>
       </motion.div>
     )
@@ -130,10 +130,10 @@ export const QuizPage = () => {
       <div className="flex items-center justify-between gap-4">
         <div className="flex-1 space-y-2">
           <div className="flex justify-between text-sm font-medium">
-            <span>Question {currentIdx + 1} of {mockQuestions.length}</span>
-            <span className="text-primary font-bold">Topic: Electrostatics</span>
+            <span>Question {currentIdx + 1} of {questions.length}</span>
+            <span className="text-primary font-bold">Topic: {currentTopic?.label}</span>
           </div>
-          <Progress value={((currentIdx + 1) / mockQuestions.length) * 100} className="h-2" />
+          <Progress value={((currentIdx + 1) / questions.length) * 100} className="h-2" />
         </div>
         <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-lg shrink-0 ${
           timeLeft < 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-primary'
@@ -153,7 +153,7 @@ export const QuizPage = () => {
             disabled={isSubmitted}
             className="space-y-4"
           >
-            {question.options.map((opt, i) => (
+            {question.options.map((opt: string, i: number) => (
               <div key={i} className={`relative flex items-center space-x-2 rounded-xl border p-4 transition-all hover:bg-muted/50 ${
                 selectedOption === i ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : ''
               } ${
@@ -188,7 +188,7 @@ export const QuizPage = () => {
             variant="secondary"
             onClick={handleNext}
           >
-            {currentIdx < mockQuestions.length - 1 ? 'Next Question' : 'Finish Quiz'} <ChevronRight className="w-5 h-5" />
+            {currentIdx < questions.length - 1 ? 'Next Question' : 'Finish Quiz'} <ChevronRight className="w-5 h-5" />
           </Button>
         )}
       </div>
@@ -219,7 +219,7 @@ export const QuizPage = () => {
                     Show AI Reasoning Chain
                   </summary>
                   <div className="mt-4 bg-muted/40 border border-dashed rounded-2xl p-5 space-y-3">
-                    {question.reasoning.map((step, i) => (
+                    {question.ai_reasoning?.map((step: string, i: number) => (
                       <div key={i} className="flex gap-4 text-xs font-medium text-muted-foreground/80">
                         <span className="font-mono text-primary bg-primary/5 w-6 h-6 flex items-center justify-center rounded shrink-0">0{i+1}</span>
                         <span className="mt-0.5">{step}</span>

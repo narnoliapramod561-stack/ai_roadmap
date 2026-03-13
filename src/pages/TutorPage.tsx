@@ -1,29 +1,42 @@
 import { useState } from 'react'
-import { Send, Bot, User, Sparkles } from 'lucide-react'
+import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { api } from '@/lib/api'
 
 export const TutorPage = () => {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about **Electromagnetic Theory** or any other topic you've uploaded." }
+    { role: 'assistant', content: "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about your topics!" }
   ])
   const [input, setInput] = useState('')
+  const [isTyping, setIsTyping] = useState(false)
 
-  const handleSend = () => {
-    if (!input.trim()) return
-    const newMessages = [...messages, { role: 'user', content: input }]
+  const handleSend = async () => {
+    if (!input.trim() || isTyping) return
+    
+    const userMessage = input.trim()
+    const newMessages = [...messages, { role: 'user', content: userMessage }]
     setMessages(newMessages)
     setInput('')
+    setIsTyping(true)
     
-    // Mock response
-    setTimeout(() => {
+    try {
+      const response = await api.chatWithTutor(userMessage)
       setMessages([...newMessages, { 
         role: 'assistant', 
-        content: "That's a great question about Gauss's Law! In simple terms, it states that the total electric flux through any closed surface is proportional to the enclosed electric charge. Think of it like a net catching 'flow' lines from a charge source." 
+        content: response.response 
       }])
-    }, 1000)
+    } catch (error) {
+      console.error(error)
+      setMessages([...newMessages, { 
+        role: 'assistant', 
+        content: "Sorry, I encountered an error. Please try again later." 
+      }])
+    } finally {
+      setIsTyping(false)
+    }
   }
 
   return (
@@ -32,11 +45,6 @@ export const TutorPage = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">🤖 AI Tutor</h1>
           <p className="text-muted-foreground mt-1">Personalized guidance based on your study materials.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="gap-2">
-            <Sparkles className="w-4 h-4 text-primary" /> Focus Mode
-          </Button>
         </div>
       </div>
 
@@ -64,6 +72,17 @@ export const TutorPage = () => {
                 )}
               </div>
             ))}
+            {isTyping && (
+              <div className="flex gap-4">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 shadow-sm">
+                  <Bot className="w-5 h-5 text-primary" />
+                </div>
+                <div className="p-4 rounded-2xl bg-muted/80 backdrop-blur-sm border border-border/50 rounded-tl-none flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <span className="text-xs text-muted-foreground font-medium italic">AI is thinking...</span>
+                </div>
+              </div>
+            )}
           </div>
         </ScrollArea>
 
@@ -75,8 +94,9 @@ export const TutorPage = () => {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               className="h-12 border-primary/20 focus-visible:ring-primary/30 bg-background/80"
+              disabled={isTyping}
             />
-            <Button size="icon" className="h-12 w-12 rounded-xl shadow-lg shadow-primary/20" onClick={handleSend}>
+            <Button size="icon" className="h-12 w-12 rounded-xl shadow-lg shadow-primary/20" onClick={handleSend} disabled={isTyping}>
               <Send className="w-5 h-5" />
             </Button>
           </div>

@@ -1,9 +1,12 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 export interface User {
   id: string
   email: string
-  fullName: string
+  firstName: string
+  className: string
+  subject: string
 }
 
 interface UserState {
@@ -14,10 +17,19 @@ interface UserState {
   logout: () => void
 }
 
-export const useUserStore = create<UserState>((set) => ({
-  user: { id: "1", email: "demo@hackathon.com", fullName: "Demo Judge" }, // Mock logged in
-  token: "mock-jwt",
-  setUser: (u) => set({ user: u }),
-  setToken: (t) => set({ token: t }),
-  logout: () => set({ user: null, token: null })
-}))
+export const useUserStore = create<UserState>()(
+  persist(
+    (set) => ({
+      user: null,
+      token: null,
+      setUser: (u) => set({ user: u }),
+      setToken: (t) => set({ token: t }),
+      logout: () => set({ user: null, token: null }),
+    }),
+    {
+      name: 'smartscholar-user-storage',
+    }
+  )
+)
+
+
