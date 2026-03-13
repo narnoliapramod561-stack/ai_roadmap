@@ -130,199 +130,189 @@ export const UploadPage = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-16 pb-20">
-      <input type="file" className="hidden" ref={fileInputRef} onChange={handleFileChange} accept=".pdf" />
+    <div className="max-w-4xl mx-auto space-y-12">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+      >
+        <h1 className="text-4xl font-black italic tracking-tighter uppercase text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] flex items-center gap-4">
+           DATA <span className="text-primary drop-shadow-[0_0_20px_#00F5D480]">INGESTION</span>
+           <div className="px-3 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-[10px] font-mono animate-pulse">
+              AWAITING_INPUT
+           </div>
+        </h1>
+        <p className="text-white/40 font-bold uppercase tracking-[0.2em] mt-2">
+          Upload syllabi & materials to synchronize the core map
+        </p>
+      </motion.div>
 
-      {/* Hero Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 glass p-10 rounded-[40px] border-white/5 relative overflow-hidden shadow-2xl">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 blur-[120px] rounded-full -mr-48 -mt-48 animate-pulse" />
-        <div className="relative z-10">
-          <h1 className="text-5xl font-black tracking-tighter uppercase italic text-glow-teal leading-none">Knowledge <span className="text-white">Forge</span> <span className="text-[10px] align-top bg-primary/20 text-primary px-2 py-1 rounded-full not-italic ml-2 font-black">v3.3</span></h1>
-          <p className="text-white/40 mt-4 font-bold uppercase tracking-[0.5em] text-[10px] flex items-center gap-2">
-            <Sparkles className="w-3 h-3 text-primary" /> Groq Real-time Neural Analysis
-          </p>
-        </div>
-      </div>
+      {/* 3D Scanner Dropzone */}
+      <motion.div 
+        initial={{ opacity: 0, rotateX: 30, scale: 0.9 }}
+        animate={{ opacity: 1, rotateX: 0, scale: 1 }}
+        transition={{ duration: 0.8, delay: 0.2 }}
+        style={{ perspective: '1000px' }}
+      >
+         <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`refracted-glass border-highlight rounded-[40px] p-16 transition-all relative overflow-hidden group ${
+              isDragging ? 'border-primary shadow-[0_0_50px_rgba(0,245,212,0.4)] bg-primary/5' : 'border-white/10'
+            }`}
+          >
+             {/* Scanner Line */}
+             <div className="absolute left-0 right-0 h-1 bg-primary/50 blur-[2px] opacity-0 group-hover:opacity-100 animate-[scan_3s_ease-in-out_infinite]" />
+             <div className="absolute left-0 right-0 h-[100px] bg-gradient-to-b from-primary/20 to-transparent opacity-0 group-hover:opacity-100 animate-[scan_3s_ease-in-out_infinite] transform -translate-y-[100px]" />
 
-      {/* Existing Materials List */}
-      <div className="space-y-8">
-        <div className="flex items-center gap-4 px-4">
-           <div className="h-px w-8 bg-primary/20 shadow-[0_0_10px_rgba(0,245,212,0.2)]" />
-           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">Active Neural Arrays</span>
-           <div className="h-px flex-1 bg-white/5" />
-        </div>
+            <div className="text-center space-y-6 relative z-10">
+              <div className="w-24 h-24 mx-auto bg-primary/10 rounded-3xl border border-primary/30 flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary/20 transition-all shadow-[0_0_30px_rgba(0,245,212,0.2)] relative">
+                <ScanLine className="w-12 h-12 text-primary absolute opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Upload className="w-12 h-12 text-primary group-hover:opacity-0 transition-opacity" />
+              </div>
+              <div className="space-y-2">
+                 <h3 className="text-2xl font-black italic uppercase tracking-tighter text-white">INITIALIZE TRANSFER</h3>
+                 <p className="text-sm font-bold uppercase tracking-widest text-white/50 leading-relaxed">
+                  Drag and drop modules here or <br />
+                  <button 
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-primary hover:text-white underline decoration-primary/50 underline-offset-4 transition-colors"
+                  >
+                    BROWSE LOCAL SYSTEM
+                  </button>
+                </p>
+              </div>
+            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              className="hidden"
+              multiple
+              accept=".pdf,.doc,.docx,.txt"
+            />
+          </div>
+      </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 md:px-0">
-          <AnimatePresence mode="popLayout">
-            {materials.map((m) => (
-              <motion.div 
-                key={m.id} 
-                layout
-                initial={{ opacity: 0, y: 20 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="group relative"
+      {/* Holographic Uploads List */}
+      {files.length > 0 && (
+        <motion.div 
+           initial={{ opacity: 0, y: 30 }}
+           animate={{ opacity: 1, y: 0 }}
+           transition={{ duration: 0.5, delay: 0.4 }}
+           className="space-y-6"
+        >
+          <div className="flex items-center justify-between">
+             <h3 className="text-sm font-black uppercase tracking-[0.2em] text-white/60 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-primary" /> Active Transfers
+             </h3>
+             <div className="text-[10px] font-mono text-primary animate-pulse">{files.filter(f => f.status === 'processing').length} PROCESSING</div>
+          </div>
+          
+          <div className="space-y-4">
+            {files.map((file) => (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                key={file.id}
+                className="bg-white/5 border border-white/10 p-6 rounded-2xl flex items-center justify-between group hover:bg-white/10 hover:border-primary/50 transition-all relative overflow-hidden"
               >
-                <div className="glass-card p-6 rounded-[32px] border-white/5 hover:border-primary/30 transition-all duration-500 hover:shadow-[0_0_40px_rgba(0,245,212,0.05)] space-y-4">
-                  <div className="flex justify-between items-start">
-                    <div className="w-12 h-12 glass border-white/10 rounded-2xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform text-primary shadow-inner">
-                      <BookOpen className="w-6 h-6" />
-                    </div>
-                    <button onClick={() => handleDelete(m.id)} className="p-2 text-white/10 hover:text-red-500 hover:bg-red-500/5 rounded-xl transition-all">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                {/* Processing glow */}
+                 {file.status === 'processing' && (
+                    <div className="absolute inset-0 bg-primary/5 animate-pulse pointer-events-none" />
+                 )}
+                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-[#B9A7FF] opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                <div className="flex items-center gap-6 relative z-10 w-full">
+                  <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20 group-hover:scale-110 transition-transform shadow-[0_0_15px_rgba(0,245,212,0.2)]">
+                    <FileText className="w-6 h-6 text-primary" />
                   </div>
-                  <div>
-                    <h3 className="font-bold text-white/90 truncate capitalize text-lg">{m.subject_name || m.filename}</h3>
-                    <div className="flex items-center gap-2 mt-2 text-[10px] font-black uppercase tracking-widest text-primary/60 italic bg-primary/5 w-fit px-3 py-1 rounded-full border border-primary/10">
-                      <Calendar className="w-3 h-3" /> {new Date(m.exam_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) || m.exam_date || 'No Date'}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-white truncate max-w-[80%]">{file.file.name}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40 bg-white/5 px-2 py-0.5 rounded">
+                        {(file.file.size / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                      {file.status === 'processing' && (
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-400 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin inline" /> Analyzing Nodes...
+                        </span>
+                      )}
+                      {file.status === 'completed' && (
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3 inline" /> Map Sycned
+                        </span>
+                      )}
+                      {file.status === 'error' && (
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-red-400 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3 inline" /> Transfer Failed
+                        </span>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Link to="/map" className="flex-1">
-                      <Button variant="ghost" size="sm" className="w-full glass border-white/5 text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all h-11 rounded-xl group/btn">
-                        Open Knowledge Map <Plus className="w-3 h-3 ml-2 group-hover:rotate-90 transition-transform" />
-                      </Button>
-                    </Link>
                   </div>
                 </div>
+
+                {file.status === 'idle' && (
+                  <button
+                    onClick={() => removeFile(file.id)}
+                    className="p-3 text-white/40 hover:text-red-400 hover:bg-red-400/10 rounded-xl transition-colors relative z-10"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+                 {file.status === 'error' && file.error && (
+                    <div className="absolute right-6 text-[10px] text-red-400 font-mono tracking-widest">{file.error}</div>
+                 )}
               </motion.div>
             ))}
-          </AnimatePresence>
-          
-          {materials.length === 0 && (
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="col-span-full py-24 text-center glass rounded-[40px] border-dashed border-2 border-white/5 italic text-white/20 font-bold uppercase tracking-[0.5em] text-xs">
-                Neural buffers empty. No materials forged yet.
-             </motion.div>
-          )}
-        </div>
-      </div>
-
-      {/* Upload Forge Section (Unified Layout) */}
-      <div className="space-y-8">
-        <div className="flex items-center gap-4 px-4">
-           <div className="h-px w-8 bg-primary/20 shadow-[0_0_10px_rgba(0,245,212,0.2)]" />
-           <span className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 italic">Initiate New Deconstruction</span>
-           <div className="h-px flex-1 bg-white/5" />
-        </div>
-
-        {!isComplete ? (
-          <div className="max-w-4xl mx-auto w-full">
-            <div className="glass p-1 md:p-12 rounded-[60px] border-white/5 bg-gradient-to-br from-white/[0.02] to-transparent relative shadow-3xl">
-              <div className="absolute inset-0 bg-primary/5 blur-[100px] rounded-full pointer-events-none opacity-20" />
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-12 relative z-10 p-8 md:p-0">
-                {/* Form Elements */}
-                <div className="space-y-10">
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60 ml-2 flex items-center gap-2">
-                      <BookOpen className="w-3 h-3" /> Subject Identity
-                    </label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Computer Science" 
-                      value={subjectName}
-                      onChange={(e) => setSubjectName(e.target.value)}
-                      className="w-full h-16 bg-white/5 border border-white/10 rounded-3xl px-8 font-bold text-white placeholder:text-white/10 focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all outline-none"
-                    />
-                  </div>
-                  
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60 ml-2 flex items-center gap-2">
-                      <Calendar className="w-3 h-3" /> Exam Timestamp (Mandatory)
-                    </label>
-                    <input 
-                      type="date" 
-                      value={examDate}
-                      onChange={(e) => setExamDate(e.target.value)}
-                      className="w-full h-16 bg-white/5 border border-white/10 rounded-3xl px-8 font-bold text-white focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5 transition-all outline-none [color-scheme:dark]"
-                    />
-                  </div>
-
-                  {error && (
-                     <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="p-5 glass border-red-500/20 rounded-3xl flex items-center gap-4 text-red-400 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-red-500/5">
-                        <AlertCircle className="w-5 h-5" /> {error}
-                     </motion.div>
-                  )}
-                </div>
-
-                {/* Drop Zone */}
-                <div className="space-y-8">
-                  <div 
-                    onClick={() => !isUploading && fileInputRef.current?.click()}
-                    className={`relative h-64 md:h-full rounded-[48px] border-dashed border-2 transition-all duration-700 flex flex-col items-center justify-center cursor-pointer group overflow-hidden ${
-                      selectedFile ? 'border-emerald-500/40 bg-emerald-500/10 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'border-white/10 hover:border-primary/40 bg-white/[0.02] hover:bg-white/[0.04]'
-                    }`}
-                  >
-                    {isUploading ? (
-                       <div className="text-center space-y-8 w-full max-w-[240px] px-4">
-                          <div className="w-20 h-20 glass border-primary/40 rounded-full flex items-center justify-center mx-auto shadow-2xl relative">
-                             <div className="absolute inset-0 rounded-full border-t-2 border-primary animate-spin" />
-                             <Loader2 className="w-8 h-8 text-primary animate-pulse" />
-                          </div>
-                          <div className="space-y-4">
-                             <div className="text-[10px] font-black uppercase tracking-[0.4em] text-primary animate-pulse italic">{status}</div>
-                             <Progress value={progress} className="h-1 bg-white/10" />
-                             <div className="text-[8px] font-bold text-white/20 uppercase tracking-[0.2em]">{progress}% Analysis</div>
-                          </div>
-                       </div>
-                    ) : (
-                      <div className="text-center space-y-6 px-10 relative z-10 transition-transform duration-500 group-hover:translate-y-[-4px]">
-                        <div className={`w-20 h-20 glass border-white/10 rounded-3xl flex items-center justify-center mx-auto shadow-2xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-700 ${selectedFile ? 'text-emerald-400 border-emerald-500/30' : 'text-primary'}`}>
-                          <UploadCloud className="w-10 h-10" />
-                        </div>
-                        <div className="space-y-2">
-                          <h3 className="text-sm font-black italic uppercase tracking-[0.2em] text-white">
-                            {selectedFile ? 'Manifest Selected' : 'Neural PDF Link'}
-                          </h3>
-                          <p className="text-white/20 font-bold uppercase tracking-[0.3em] text-[8px]">
-                            {selectedFile ? selectedFile.name : 'Drag or Browse to Upload'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-12 relative z-10 px-8 md:px-0">
-                <Button 
-                  className="w-full h-24 rounded-[32px] bg-primary text-black font-black uppercase tracking-[0.5em] text-sm italic hover:scale-[1.01] active:scale-95 transition-all shadow-2xl shadow-primary/30 disabled:opacity-10 border-t border-white/20 mb-8 md:mb-0"
-                  onClick={handleStartUpload}
-                  disabled={!selectedFile || !subjectName || !examDate || isUploading}
-                >
-                  {isUploading ? <Loader2 className="animate-spin" /> : 'Execute Neural Forge'}
-                </Button>
-              </div>
-            </div>
           </div>
-        ) : (
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-12 max-w-4xl mx-auto">
-            <div className="glass p-16 rounded-[60px] border-emerald-500/20 relative overflow-hidden text-center space-y-10 shadow-3xl bg-emerald-500/[0.02]">
-               <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
-               <div className="w-24 h-24 bg-emerald-500/10 rounded-[32px] flex items-center justify-center mx-auto shadow-inner border border-emerald-500/20 rotate-3 animate-bounce-slow">
-                  <Sparkles className="w-10 h-10 text-emerald-400" />
-               </div>
-               <div className="space-y-4">
-                  <h2 className="text-4xl font-black italic uppercase tracking-tighter text-glow-teal leading-tight">Neural Sync Complete</h2>
-                  <p className="text-white/40 font-bold uppercase tracking-[0.3em] text-[10px] max-w-sm mx-auto leading-relaxed">
-                    Successfully forged {uploadResult?.analysis?.total_topics} core entities into your Knowledge Map.
-                  </p>
-               </div>
-               <div className="flex flex-col sm:flex-row justify-center gap-6 pt-6 px-10">
-                  <Link to="/map" className="flex-1">
-                    <Button size="lg" className="w-full rounded-[24px] px-12 h-20 bg-primary text-black font-black uppercase tracking-[0.3em] hover:scale-[1.03] transition-all shadow-xl shadow-primary/20">
-                      View Results
-                    </Button>
-                  </Link>
-                  <Button size="lg" variant="ghost" className="flex-1 rounded-[24px] px-12 h-20 glass border-white/10 text-white font-black uppercase tracking-[0.3em] hover:bg-white/5 transition-all" onClick={() => setIsComplete(false)}>
-                    New Entry
-                  </Button>
-               </div>
+
+          {files.some(f => f.status === 'idle') && (
+            <div className="pt-8">
+               <button
+                  onClick={processFiles}
+                  disabled={processing}
+                  className="w-full py-5 bg-primary text-black hover:bg-white transition-all rounded-[20px] font-black text-xl uppercase tracking-[0.2em] shadow-[0_0_40px_rgba(0,245,212,0.3)] disabled:opacity-50 flex flex-col items-center justify-center gap-1 relative overflow-hidden group"
+               >
+                 <span className="relative z-10 flex items-center gap-3">
+                    {processing ? (
+                       <>
+                         <Cpu className="w-6 h-6 animate-pulse" /> SYNTHESIZING ROADMAP...
+                       </>
+                    ) : (
+                       <>
+                         <BrainCircuit className="w-6 h-6" /> INITIATE L3.3 KNOWLEDGE GRAPH
+                       </>
+                    )}
+                 </span>
+                 {!processing && <span className="text-[10px] font-bold text-black/50 tracking-[0.4em] block relative z-10">Consume metadata to build physical node clusters</span>}
+                 <div className="absolute inset-0 bg-gradient-to-r from-primary via-white to-primary opacity-0 group-hover:opacity-20 animate-pulse pointer-events-none" />
+               </button>
             </div>
-          </motion.div>
-        )}
-      </div>
+          )}
+        </motion.div>
+      )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .refracted-glass {
+          background: rgba(10, 10, 15, 0.7);
+          backdrop-filter: blur(25px) saturate(160%);
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+        .border-highlight {
+          border: 1px solid transparent;
+          background: linear-gradient(#07070A, #07070A) padding-box,
+                      linear-gradient(135deg, rgba(0, 245, 212, 0.5) 0%, transparent 40%) border-box;
+        }
+        @keyframes scan {
+          0% { top: -100px; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+      `}} />
     </div>
-  )
-}
+  );
+};

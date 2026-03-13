@@ -1,10 +1,7 @@
-import { useRef, useMemo } from 'react'
-import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform, useScroll } from 'framer-motion'
 import { Network, ChevronRight, Cpu, Globe, BrainCircuit, ShieldCheck, Rocket } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import * as THREE from 'three'
 
 // --- 1. HUD: Technical Readouts ---
 const HUD = () => {
@@ -38,72 +35,7 @@ const HUD = () => {
   )
 }
 
-// --- 2. 3D Kinetic Grid Background ---
-const KineticGrid = () => {
-  const meshRef = useRef<THREE.Points>(null!)
-  const { mouse, viewport } = useThree()
-
-  const count = 50
-  const [positions, initialPositions] = useMemo(() => {
-    const pos = new Float32Array(count * count * 3)
-    const init = new Float32Array(count * count * 3)
-    for (let i = 0; i < count; i++) {
-      for (let j = 0; j < count; j++) {
-        const idx = (i * count + j) * 3
-        pos[idx] = (i - count / 2) * 0.8
-        pos[idx + 1] = -5 // Ground level
-        pos[idx + 2] = (j - count / 2) * 0.8
-        init[idx] = pos[idx]
-        init[idx + 1] = pos[idx + 1]
-        init[idx + 2] = pos[idx + 2]
-      }
-    }
-    return [pos, init]
-  }, [])
-
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime()
-    const pos = meshRef.current.geometry.attributes.position.array as Float32Array
-    
-    for (let i = 0; i < count * count; i++) {
-        const idx = i * 3
-        const x = initialPositions[idx]
-        const z = initialPositions[idx + 2]
-        
-        // Mouse interaction: dip
-        const dist = Math.sqrt(Math.pow(x - mouse.x * viewport.width, 2) + Math.pow(z + mouse.y * viewport.height * 2, 2))
-        const dip = Math.exp(-dist * 0.5) * 2
-        
-        // Wave animation
-        const wave = Math.sin(x * 0.5 + time) * 0.1 + Math.cos(z * 0.5 + time) * 0.1
-        
-        pos[idx + 1] = initialPositions[idx + 1] - dip + wave
-    }
-    meshRef.current.geometry.attributes.position.needsUpdate = true
-    meshRef.current.rotation.y = time * 0.05
-  })
-
-  return (
-    <points ref={meshRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={positions.length / 3}
-          array={positions}
-          itemSize={3}
-        />
-      </bufferGeometry>
-      <pointsMaterial
-        size={0.05}
-        color="#00F5D4"
-        transparent
-        opacity={0.3}
-        sizeAttenuation
-        blending={THREE.AdditiveBlending}
-      />
-    </points>
-  )
-}
+// Removed local KineticGrid component implementation
 
 // --- 3. High-Refraction Tilt Card ---
 const RefractedCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string, desc: string, delay: number }) => {
@@ -227,14 +159,8 @@ export const LandingPage = () => {
         }
       `}} />
 
-      {/* BACKGROUND SCENE */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Canvas camera={{ position: [0, 2, 10], fov: 45 }}>
-          <ambientLight intensity={1} />
-          <pointLight position={[0, 10, 0]} color="#00F5D4" intensity={5} />
-          <KineticGrid />
-        </Canvas>
-      </div>
+{/* BACKGROUND SCENE (Now Global in App.tsx) */}
+
 
       <nav className="fixed top-12 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-5xl px-8 pointer-events-none">
         <div className="refracted-glass border-highlight py-5 px-12 rounded-full flex items-center justify-between pointer-events-auto">

@@ -1,249 +1,230 @@
-import { useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { User as UserIcon, ArrowRight, Sparkles, Upload, File as FileIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
-import { useUserStore } from '@/stores/useUserStore'
-import { useStudyStore } from '@/stores/useStudyStore'
-import { api } from '@/lib/api'
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { supabase } from '@/lib/supabase';
+import { User, Lock, Mail, ChevronRight, ShieldCheck, BrainCircuit } from 'lucide-react';
+import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
 
 export const AuthPage = () => {
-  const [formData, setFormData] = useState({
-    firstName: ''
-  })
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState('')
-  
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
-  const setUser = useUserStore((state) => state.setUser)
-  const clearAllData = useUserStore((state) => state.clearAllData)
-  const setMaterial = useStudyStore((state) => state.setMaterial)
-  const setRoadmap = useStudyStore((state) => state.setRoadmap)
-  const addMaterial = useStudyStore((state) => state.addMaterial)
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file && file.type === 'application/pdf') {
-      setSelectedFile(file)
-      setError(null)
-    } else if (file) {
-      setError('Please upload a valid PDF file.')
-    }
+  // 3D Tilt Effect
+  const mouseX = useMotionValue(0)
+  const mouseY = useMotionValue(0)
+
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [10, -10]), { damping: 40, stiffness: 200 })
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-10, 10]), { damping: 40, stiffness: 200 })
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect()
+    const xPct = (e.clientX - rect.left) / rect.width - 0.5
+    const yPct = (e.clientY - rect.top) / rect.height - 0.5
+    mouseX.set(xPct)
+    mouseY.set(yPct)
   }
 
-  const handleSubmit = async () => {
-    if (!formData.firstName) return
-    
-    // Clear old data first
-    clearAllData()
-    
-    setIsLoading(true)
-    setError(null)
-    setStatus('Forging your academic identity...')
+  const handleMouseLeave = () => {
+    mouseX.set(0)
+    mouseY.set(0)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      const userId = 'user_' + Math.random().toString(36).substr(2, 9)
-      const userObj = {
-        id: userId,
-        email: 'user@smartscholar.ai',
-        firstName: formData.firstName
-      }
-      setUser(userObj)
+      if (isLogin) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (selectedFile) {
-        setStatus('Neural network parsing your syllabus...')
-        setStatus('Analyzing syllabus...')
-        try {
-          const result = await api.uploadMaterial(selectedFile, userId, 'Initial Syllabus')
-          setMaterial(result.material_id, result.analysis)
-          setRoadmap(result.analysis.knowledge_graph.nodes)
-          
-          addMaterial({
-            id: result.material_id,
-            filename: selectedFile.name,
-            subject_name: 'Initial Syllabus',
-            created_at: new Date().toISOString()
-          })
-        } catch (uploadError: any) {
-          console.error("Optional upload failed:", uploadError)
-          setError(`Profile created, but syllabus upload failed: ${uploadError.message || 'Unknown error'}. You can upload it later in the dashboard.`)
-          setStatus('Syllabus upload failed.')
-          
-          setTimeout(() => {
-            setIsLoading(false)
-            navigate('/dashboard')
-          }, 4000)
-          return
+        if (error) throw error;
+        
+        // Ensure user metadata is set after login for the avatar
+        if (data.user && !data.user.user_metadata?.full_name && fullName) {
+           await supabase.auth.updateUser({
+              data: { full_name: fullName }
+           });
         }
+        
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+            },
+          },
+        });
+
+        if (error) throw error;
+        alert('Registration successful! Please sign in.');
+        setIsLogin(true);
       }
-
-      setStatus('Success! Opening dashboard...')
-      setTimeout(() => {
-        setIsLoading(false)
-        navigate('/dashboard')
-      }, 800)
-
+      if (isLogin) {
+         navigate('/dashboard');
+      }
     } catch (err: any) {
-      setError(err.message || 'Something went wrong during setup.')
-      setIsLoading(false)
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-  }
-
-  const stepContent = [
-    {
-      id: 1,
-      title: "What's your name?",
-      subtitle: "Let's personalize your AI experience.",
-      icon: <UserIcon className="w-8 h-8 text-primary" />,
-      field: (
-        <div className="space-y-8 w-full">
-          <Input
-            placeholder="Enter your first name"
-            value={formData.firstName}
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-            className="h-16 text-xl text-center bg-background/50 border-primary/20 focus-visible:ring-primary/30 rounded-2xl"
-            autoFocus
-          />
-          
-          <div className="pt-4 space-y-4">
-            <div className="flex items-center gap-3 px-1">
-              <div className="h-px flex-1 bg-primary/10" />
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/20">Optional Cognitive Link</span>
-              <div className="h-px flex-1 bg-primary/10" />
-            </div>
-
-            <input 
-              type="file" 
-              accept=".pdf" 
-              className="hidden" 
-              ref={fileInputRef}
-              onChange={handleFileChange}
-            />
-            {!selectedFile ? (
-              <Button 
-                variant="outline" 
-                type="button"
-                className="w-full h-14 border-dashed border-primary/10 hover:border-primary/40 hover:bg-primary/5 group rounded-[18px] transition-all"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center gap-2">
-                    <Upload className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest">Upload Syllabus PDF</span>
-                  </div>
-                </div>
-              </Button>
-            ) : (
-              <div className="flex items-center justify-between p-4 bg-primary/5 border border-primary/10 rounded-2xl">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                    <FileIcon className="w-4 h-4 text-primary shrink-0" />
-                  </div>
-                  <div className="flex flex-col text-left">
-                    <span className="text-[10px] font-black uppercase tracking-tight truncate w-32">{selectedFile.name}</span>
-                    <span className="text-[8px] text-white/30 font-bold uppercase tracking-widest">PDF Material Loaded</span>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setSelectedFile(null)}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-                >
-                  <span className="text-[10px] font-black uppercase text-red-500/50 hover:text-red-500">Remove</span>
-                </button>
-              </div>
-            )}
-            <p className="text-[9px] text-white/20 font-bold uppercase tracking-widest leading-relaxed">
-              Uploading a syllabus allows the AI to architect your personalized roadmap instantly.
-            </p>
-          </div>
-        </div>
-      ),
-      isValid: formData.firstName.length > 1
-    }
-  ]
-
-  const currentStep = stepContent[0]
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-background to-background text-foreground text-glow-teal">
-      <div className="w-full max-w-md space-y-8">
-        <div className="text-center space-y-2">
-          <div className="inline-flex p-3 rounded-2xl bg-primary/10 mb-2">
-            <Sparkles className="w-6 h-6 text-primary" />
-          </div>
-          <h1 className="text-4xl font-black tracking-tight uppercase italic">
-            Smart<span className="text-primary">Scholar</span>
-          </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30">Setting up your AI educational brain</p>
-        </div>
+    <div className="min-h-screen text-white flex flex-col justify-center items-center p-6 selection:bg-primary/40 font-sans overflow-hidden" style={{ perspective: '2000px' }}>
+      
+      {/* Background glow specific to auth */}
+      <div className="fixed inset-0 pointer-events-none z-[-1]">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-primary/10 blur-[150px] rounded-full" />
+      </div>
 
-        <Card className="border-primary/10 shadow-2xl shadow-primary/5 bg-card/50 backdrop-blur-xl rounded-[40px] overflow-hidden">
-          <CardContent className="pt-12 pb-10 px-10 flex flex-col items-center">
-            {isLoading ? (
-              <div className="py-12 flex flex-col items-center space-y-6 w-full">
-                <div className="relative">
-                  <div className="w-20 h-20 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-primary animate-pulse" />
+      <style dangerouslySetInnerHTML={{ __html: `
+        .refracted-glass {
+          background: rgba(10, 10, 15, 0.7);
+          backdrop-filter: blur(25px) saturate(160%);
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+        .border-highlight {
+          border: 1px solid transparent;
+          background: linear-gradient(#07070A, #07070A) padding-box,
+                      linear-gradient(135deg, rgba(0, 245, 212, 0.5) 0%, transparent 40%) border-box;
+        }
+        .input-glow:focus-within {
+          box-shadow: 0 0 20px rgba(0, 245, 212, 0.2);
+          border-color: rgba(0, 245, 212, 0.5);
+        }
+      `}} />
+
+      <Link to="/" className="absolute top-10 left-10 flex items-center gap-3 group z-50">
+        <div className="w-8 h-8 bg-primary rounded-lg rotate-45 group-hover:rotate-0 transition-transform duration-500 shadow-[0_0_20px_#00F5D4]" />
+        <span className="font-black text-xl tracking-[0.2em] italic text-primary drop-shadow-[0_0_10px_#00F5D450] hidden sm:block">SMARTSCHOLAR</span>
+      </Link>
+
+      <motion.div
+        initial={{ opacity: 0, filter: 'blur(20px)', scale: 0.9 }}
+        animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="w-full max-w-md relative z-10"
+      >
+        <motion.div
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
+          className="refracted-glass border-highlight rounded-[40px] p-10 md:p-12 relative overflow-hidden group"
+        >
+           {/* Internal Glow Follower */}
+          <motion.div 
+            className="absolute inset-0 z-[-1] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            style={{
+              background: useMotionTemplate`radial-gradient(300px circle at ${useTransform(mouseX, [-0.5, 0.5], [0, 100])}% ${useTransform(mouseY, [-0.5, 0.5], [0, 100])}%, rgba(0, 245, 212, 0.1), transparent 70%)`
+            }}
+          />
+
+          <div style={{ transform: "translateZ(40px)" }} className="text-center mb-10">
+            <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-2">
+              {isLogin ? 'NEURAL' : 'INITIALIZE'} <span className="text-primary truncate block drop-shadow-[0_0_10px_#00F5D440]">PORTAL</span>
+            </h2>
+            <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">
+              {isLogin ? 'Authenticate to interface' : 'Create an uplink'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6" style={{ transform: "translateZ(30px)" }}>
+            {!isLogin && (
+              <div className="space-y-2 relative">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Agent Name</label>
+                <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <User className="h-5 w-5 text-primary opacity-70" />
                   </div>
-                </div>
-                <div className="text-center space-y-2">
-                  <h3 className="text-xl font-black uppercase italic tracking-tight">{status}</h3>
-                  <p className="text-[9px] font-black uppercase tracking-widest text-white/30">Cognitive Layer Construction in Progress...</p>
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold"
+                    placeholder="Enter full name"
+                    required={!isLogin}
+                  />
                 </div>
               </div>
-            ) : (
-              <>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={1}
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.05 }}
-                    className="w-full space-y-8 text-center"
-                  >
-                    <div className="mx-auto w-16 h-16 rounded-3xl bg-primary/5 flex items-center justify-center mb-4 border border-primary/10 shadow-xl">
-                      {currentStep.icon}
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <h2 className="text-2xl font-black uppercase tracking-tighter italic">{currentStep.title}</h2>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/40">{currentStep.subtitle}</p>
-                    </div>
-
-                    <div className="w-full">
-                      {currentStep.field}
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-
-                {error && (
-                  <p className="mt-4 text-xs text-destructive font-bold bg-destructive/10 px-3 py-2 rounded-lg w-full text-center">
-                    {error}
-                  </p>
-                )}
-
-                <div className="w-full mt-10">
-                  <Button 
-                    size="lg" 
-                    className="w-full h-16 text-lg font-black uppercase tracking-widest shadow-xl shadow-primary/20 rounded-[20px]"
-                    onClick={handleSubmit}
-                    disabled={!currentStep.isValid || isLoading}
-                  >
-                    {selectedFile ? 'Forging Roadmap' : 'Initialize Brain'} 
-                    <ArrowRight className="ml-2 w-6 h-6" />
-                  </Button>
-                </div>
-              </>
             )}
-          </CardContent>
-        </Card>
-      </div>
+
+            <div className="space-y-2 relative">
+               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Uplink Frequency (Email)</label>
+              <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-primary opacity-70" />
+                </div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold"
+                  placeholder="Enter email channel"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 relative">
+               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Encryption Key (Password)</label>
+              <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-primary opacity-70" />
+                </div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold tracking-widest"
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-bold flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 shrink-0" />
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="relative w-full py-4 mt-8 bg-primary text-black hover:bg-white hover:scale-[1.02] transition-all rounded-2xl font-black text-lg uppercase tracking-[0.2em] shadow-[0_0_20px_rgba(0,245,212,0.2)] disabled:opacity-50 flex items-center justify-center group"
+            >
+              {loading ? (
+                 <BrainCircuit className="w-6 h-6 animate-pulse" />
+              ) : (
+                <>
+                  {isLogin ? 'AUTHENTICATE' : 'INITIALIZE'}
+                  <ChevronRight className="w-6 h-6 ml-2 opacity-50 group-hover:opacity-100 transition-opacity" />
+                </>
+              )}
+            </button>
+          </form>
+
+          <div style={{ transform: "translateZ(20px)" }} className="mt-8 text-center">
+            <button
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-xs font-black uppercase tracking-[0.2em] text-white/40 hover:text-primary transition-colors underline decoration-white/20 hover:decoration-primary/50 underline-offset-4"
+            >
+              {isLogin ? 'Request New Uplink (Sign Up)' : 'Existing Agent (Sign In)'}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
     </div>
-  )
-}
+  );
+};
