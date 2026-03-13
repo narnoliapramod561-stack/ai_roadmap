@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Link } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useStudyStore } from '@/stores/useStudyStore'
+import { useUserStore } from '@/stores/useUserStore'
 
 export const QuizPage = () => {
   const [questions, setQuestions] = useState<any[]>([])
@@ -20,9 +21,14 @@ export const QuizPage = () => {
   const [isFinished, setIsFinished] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [quizId, setQuizId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Track ALL answers across questions — Fix #2
+  const [answers, setAnswers] = useState<number[]>([])
 
   const roadmap = useStudyStore(state => state.roadmap)
-  const currentTopic = roadmap[0] // Default to first topic for demo
+  const user = useUserStore(state => state.user)
+  const currentTopic = roadmap[0]
 
   useEffect(() => {
     const loadQuiz = async () => {
@@ -31,11 +37,15 @@ export const QuizPage = () => {
         return
       }
       try {
+        setError(null)
         const result = await api.generateQuiz(currentTopic.id)
         setQuestions(result.questions)
         setQuizId(result.quiz_id)
-      } catch (error) {
-        console.error(error)
+        // Initialize answers array with -1 for each question
+        setAnswers(new Array(result.questions.length).fill(-1))
+      } catch (err: any) {
+        console.error(err)
+        setError(err.message || 'Failed to generate quiz. Please try again.')
       } finally {
         setIsLoading(false)
       }
@@ -46,16 +56,21 @@ export const QuizPage = () => {
   const question = questions[currentIdx]
 
   useEffect(() => {
-    if (timeLeft > 0 && !isSubmitted && !isFinished && !isLoading) {
+    if (timeLeft > 0 && !isSubmitted && !isFinished && !isLoading && !error) {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
       return () => clearTimeout(timer)
     }
-  }, [timeLeft, isSubmitted, isFinished, isLoading])
+  }, [timeLeft, isSubmitted, isFinished, isLoading, error])
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (selectedOption === null || !quizId || !currentTopic) return
     setIsSubmitted(true)
     
+    // Store the answer for THIS question in the tracking array
+    const updatedAnswers = [...answers]
+    updatedAnswers[currentIdx] = selectedOption
+    setAnswers(updatedAnswers)
+
     if (selectedOption === question.correct) {
       setScore(s => s + 1)
     }
@@ -68,12 +83,43 @@ export const QuizPage = () => {
       setIsSubmitted(false)
       setTimeLeft(30)
     } else {
+      // Submit the FULL answers array — Fix #2
       if (quizId && currentTopic) {
-        const userAnswers = questions.map((_, i) => i === currentIdx ? selectedOption : -1)
-        await api.submitQuiz(quizId, userAnswers as number[], currentTopic.id)
+        try {
+          await api.submitQuiz(quizId, answers, currentTopic.id, user?.id)
+        } catch (err) {
+          console.error('Failed to submit quiz results:', err)
+        }
       }
       setIsFinished(true)
     }
+  }
+
+  const handleRetry = () => {
+    setError(null)
+    setIsLoading(true)
+    setQuestions([])
+    setCurrentIdx(0)
+    setSelectedOption(null)
+    setIsSubmitted(false)
+    setScore(0)
+    setIsFinished(false)
+    setTimeLeft(30)
+    setAnswers([])
+    
+    const loadQuiz = async () => {
+      try {
+        const result = await api.generateQuiz(currentTopic.id)
+        setQuestions(result.questions)
+        setQuizId(result.quiz_id)
+        setAnswers(new Array(result.questions.length).fill(-1))
+      } catch (err: any) {
+        setError(err.message || 'Failed to generate quiz.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadQuiz()
   }
 
   if (isLoading) {
@@ -81,6 +127,29 @@ export const QuizPage = () => {
       <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
         <Loader2 className="w-10 h-10 text-primary animate-spin" />
         <p className="text-muted-foreground font-medium">AI generating personalized quiz...</p>
+      </div>
+    )
+  }
+
+  // Error state with retry — Fix #4
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-6 text-center px-6">
+        <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center">
+          <AlertCircle className="w-8 h-8 text-red-500" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold mb-2">Quiz Generation Failed</h2>
+          <p className="text-muted-foreground max-w-md">{error}</p>
+        </div>
+        <div className="flex gap-3">
+          <Button onClick={handleRetry} className="gap-2">
+            <RefreshCw className="w-4 h-4" /> Try Again
+          </Button>
+          <Link to="/dashboard">
+            <Button variant="outline">Back to Dashboard</Button>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -116,7 +185,7 @@ export const QuizPage = () => {
         </Card>
 
         <div className="flex gap-4 justify-center">
-          <Button size="lg" onClick={() => window.location.reload()}>Retry Quiz</Button>
+          <Button size="lg" onClick={handleRetry}>Retry Quiz</Button>
           <Link to="/map">
             <Button size="lg" variant="outline">View Progress Map</Button>
           </Link>

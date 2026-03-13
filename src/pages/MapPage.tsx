@@ -27,12 +27,20 @@ export const MapPage = () => {
 
   useEffect(() => {
     if (storeRoadmap.length > 0) {
-      // Map store data to ReactFlow format
+      // Fix #8: Grid layout — 3 columns instead of all stacked at x:300
+      const COLS = 3
+      const X_GAP = 280
+      const Y_GAP = 120
+      const X_OFFSET = 100
+
       const flowNodes = storeRoadmap.map((node: any, index: number) => {
         const colors = getMasteryColor(node.mastery || 0)
+        const col = index % COLS
+        const row = Math.floor(index / COLS)
+        
         return {
           id: node.id,
-          position: node.position || { x: 300, y: index * 100 + 50 },
+          position: node.position || { x: X_OFFSET + col * X_GAP, y: 50 + row * Y_GAP },
           data: { 
             label: node.label, 
             mastery: node.mastery || 0, 
@@ -46,14 +54,18 @@ export const MapPage = () => {
             fontWeight: 'bold', 
             padding: '12px 20px', 
             fontSize: '14px', 
-            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' 
+            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+            minWidth: '180px',
+            textAlign: 'center' as const,
           }
         }
       })
 
       const flowEdges = currentMaterial?.knowledge_graph?.edges?.map((edge: any) => ({
         ...edge,
-        markerEnd: { type: MarkerType.ArrowClosed }
+        markerEnd: { type: MarkerType.ArrowClosed },
+        style: { stroke: '#94a3b8', strokeWidth: 2 },
+        animated: true,
       })) || []
 
       setNodes(flowNodes)
@@ -101,6 +113,20 @@ export const MapPage = () => {
         <p className="text-[10px] text-muted-foreground mt-1">
           Each node is a concept extracted from your syllabus. Color shows current AI mastery.
         </p>
+        <div className="mt-3 space-y-1">
+          <div className="flex items-center gap-2 text-[10px]">
+            <div className="w-3 h-3 rounded-sm bg-[#bbf7d0] border border-[#22c55e]" /> Mastered (80%+)
+          </div>
+          <div className="flex items-center gap-2 text-[10px]">
+            <div className="w-3 h-3 rounded-sm bg-[#fef08a] border border-[#eab308]" /> Learning (40-79%)
+          </div>
+          <div className="flex items-center gap-2 text-[10px]">
+            <div className="w-3 h-3 rounded-sm bg-[#fecaca] border border-[#ef4444]" /> Needs Work (&lt;40%)
+          </div>
+          <div className="flex items-center gap-2 text-[10px]">
+            <div className="w-3 h-3 rounded-sm bg-[#f3f4f6] border border-[#9ca3af]" /> Not Started
+          </div>
+        </div>
       </div>
 
       <ReactFlow

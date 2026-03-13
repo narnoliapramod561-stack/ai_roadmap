@@ -12,6 +12,7 @@ export const GraderPage = () => {
   const [status, setStatus] = useState('')
   const [isComplete, setIsComplete] = useState(false)
   const [gradeResult, setGradeResult] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -21,11 +22,11 @@ export const GraderPage = () => {
 
   const startRealGrading = async (file: File) => {
     setIsGrading(true)
+    setError(null)
     setProgress(20)
     setStatus('Analyzing handwriting...')
     
     try {
-      // For demo purposes, we'll use a placeholder question and topic if none are provided
       const result = await api.gradeHandwritten(
         file, 
         "Explain Gauss's Law and its mathematical derivation.", 
@@ -35,17 +36,29 @@ export const GraderPage = () => {
       setProgress(60)
       setStatus('Evaluating logic structure...')
       
+      // Brief delay for UX
+      await new Promise(r => setTimeout(r, 500))
+      
       setProgress(100)
       setStatus('Finalizing score...')
       
       setGradeResult(result)
       setIsGrading(false)
       setIsComplete(true)
-    } catch (error) {
-      console.error(error)
-      setStatus('Grading failed. Please try again.')
+    } catch (err: any) {
+      console.error(err)
+      setError(err.message || 'Grading failed. Please try again.')
       setIsGrading(false)
+      setProgress(0)
     }
+  }
+
+  const handleReset = () => {
+    setIsComplete(false)
+    setIsGrading(false)
+    setError(null)
+    setProgress(0)
+    setGradeResult(null)
   }
 
   return (
@@ -62,6 +75,15 @@ export const GraderPage = () => {
         <h1 className="text-3xl font-bold tracking-tight">🖋️ Handwritten Grader</h1>
         <p className="text-muted-foreground mt-1">Upload a photo of your handwritten long-form answers for instant AI evaluation.</p>
       </div>
+
+      {/* Error banner — always visible above card — Fix #5+7 */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-600 dark:text-red-400">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-medium">{error}</span>
+          <Button variant="ghost" size="sm" className="ml-auto" onClick={handleReset}>Dismiss</Button>
+        </div>
+      )}
 
       {!isComplete ? (
         <Card className="border-dashed border-2 border-muted hover:border-primary/50 transition-colors bg-muted/10">
@@ -85,7 +107,6 @@ export const GraderPage = () => {
                 <div className="flex gap-4 justify-center mt-4">
                   <Button size="lg" onClick={() => fileInputRef.current?.click()}>Browse Image</Button>
                   <Button size="lg" variant="secondary" onClick={() => {
-                    // Create a temporary input with capture for mobile camera
                     const input = document.createElement('input')
                     input.type = 'file'
                     input.accept = 'image/*'
@@ -126,7 +147,7 @@ export const GraderPage = () => {
             <CardContent className="flex flex-col items-center justify-center space-y-4">
               <div className="text-7xl font-extrabold text-primary">{gradeResult?.score}<span className="text-4xl text-muted-foreground">/10</span></div>
               <div className="text-xl font-bold px-4 py-1 bg-primary text-primary-foreground rounded-full">Grade: {gradeResult?.grade}</div>
-              <Button className="w-full mt-4" variant="outline" onClick={() => setIsComplete(false)}>Grade Another</Button>
+              <Button className="w-full mt-4" variant="outline" onClick={handleReset}>Grade Another</Button>
             </CardContent>
           </Card>
 

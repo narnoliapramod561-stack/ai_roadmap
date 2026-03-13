@@ -1,12 +1,21 @@
 import google.generativeai as genai
 import os
 import json
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-2.0-flash')
+
+
+def _parse_json(text: str):
+    """Unified JSON parser that handles markdown code fences and whitespace variants."""
+    cleaned = re.sub(r'```\s*json?\s*', '', text)
+    cleaned = re.sub(r'```\s*', '', cleaned)
+    return json.loads(cleaned.strip())
+
 
 async def analyze_syllabus(raw_text: str):
     """
@@ -41,8 +50,7 @@ async def analyze_syllabus(raw_text: str):
     
     response = model.generate_content(prompt)
     try:
-        content = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(content)
+        return _parse_json(response.text)
     except Exception as e:
         return {"error": "Failed to parse AI response", "details": str(e)}
 
@@ -73,8 +81,7 @@ async def generate_mcqs(topic: str, context: str = "", count: int = 5, difficult
     
     response = model.generate_content(prompt)
     try:
-        content = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(content)
+        return _parse_json(response.text)
     except Exception as e:
         return {"error": "Failed to parse AI response", "details": str(e)}
 
@@ -100,14 +107,14 @@ async def generate_schedule(exam_date: str, daily_hours: float, weak_topics: lis
     
     response = model.generate_content(prompt)
     try:
-        content = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(content)
+        return _parse_json(response.text)
     except Exception as e:
         return {"error": "Failed to generate schedule", "details": str(e)}
 
 async def grade_handwritten(image_base64: str, question: str, topic: str):
     """
     Grades a handwritten answer image using Gemini Vision.
+    Uses inline_data format required by the Gemini API.
     """
     prompt = f"""
     You are a professor-level grader. Analyze the handwritten answer in the image for the following:
@@ -129,15 +136,21 @@ async def grade_handwritten(image_base64: str, question: str, topic: str):
     }}
     """
     
-    # Gemini 2.0 Flash handles vision natively in the same model
+    # Auto-detect mime type — default to jpeg
+    mime_type = "image/jpeg"
+    if image_base64.startswith("/9j/"):
+        mime_type = "image/jpeg"
+    elif image_base64.startswith("iVBOR"):
+        mime_type = "image/png"
+    
+    # Use the correct inline_data format for Gemini Vision
     contents = [
-        {"mime_type": "image/jpeg", "data": image_base64},
-        prompt
+        prompt,
+        {"inline_data": {"mime_type": mime_type, "data": image_base64}},
     ]
     
     response = model.generate_content(contents)
     try:
-        content = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(content)
+        return _parse_json(response.text)
     except Exception as e:
         return {"error": "Failed to grade image", "details": str(e)}

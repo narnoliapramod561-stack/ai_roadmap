@@ -12,7 +12,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
       throw new Error(error.detail || 'Failed to upload material');
     }
 
@@ -35,7 +35,10 @@ export const api = {
       body: JSON.stringify({ topic_id: topicId, count, difficulty }),
     });
 
-    if (!response.ok) throw new Error('Failed to generate quiz');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Quiz generation failed' }));
+      throw new Error(error.detail || 'Failed to generate quiz');
+    }
     return response.json();
   },
 
@@ -51,7 +54,10 @@ export const api = {
       }),
     });
 
-    if (!response.ok) throw new Error('Failed to submit quiz');
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Quiz submission failed' }));
+      throw new Error(error.detail || 'Failed to submit quiz');
+    }
     return response.json();
   },
 
@@ -67,7 +73,7 @@ export const api = {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({ detail: 'Grading failed' }));
       throw new Error(error.detail || 'Failed to grade handwritten answer');
     }
 
@@ -82,6 +88,24 @@ export const api = {
     });
 
     if (!response.ok) throw new Error('Failed to chat with tutor');
+    return response.json();
+  },
+
+  async updateMastery(topicId: string, quality: number, userId?: string) {
+    const response = await fetch(`${API_BASE_URL}/study/update-mastery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic_id: topicId,
+        quality,
+        user_id: userId,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Mastery update failed' }));
+      throw new Error(error.detail || 'Failed to update mastery');
+    }
     return response.json();
   },
 };
