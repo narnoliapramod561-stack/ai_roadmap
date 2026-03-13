@@ -1,108 +1,122 @@
-import { useRef, useMemo, useEffect } from 'react'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform } from 'framer-motion'
-import { Network, Sparkles, ChevronRight, Cpu, Globe, BrainCircuit, ShieldCheck, Rocket } from 'lucide-react'
+import { useRef, useMemo } from 'react'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { motion, useMotionTemplate, useMotionValue, useSpring, useTransform, useScroll } from 'framer-motion'
+import { Network, ChevronRight, Cpu, Globe, BrainCircuit, ShieldCheck, Rocket } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import * as THREE from 'three'
 
-// --- 1. 3D Iridescent Crystal Core ---
-const vertexShader = `
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  varying vec3 vViewPosition;
-
-  void main() {
-    vUv = uv;
-    vNormal = normalize(normalMatrix * normal);
-    vPosition = position;
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-    vViewPosition = -mvPosition.xyz;
-    gl_Position = projectionMatrix * mvPosition;
-  }
-`
-
-const fragmentShader = `
-  varying vec2 vUv;
-  varying vec3 vNormal;
-  varying vec3 vPosition;
-  varying vec3 vViewPosition;
-  uniform float uTime;
-
-  void main() {
-    vec3 normal = normalize(vNormal);
-    vec3 viewDir = normalize(vViewPosition);
-
-    float fresnelTerm = dot(viewDir, normal);
-    fresnelTerm = clamp(1.0 - fresnelTerm, 0.0, 1.0);
-    fresnelTerm = pow(fresnelTerm, 2.0);
-
-    vec3 color1 = vec3(0.0, 0.96, 0.83); // Teal
-    vec3 color2 = vec3(0.44, 0.0, 1.0); // Violet
-    vec3 color3 = vec3(1.0, 0.0, 0.9);   // Pink
-
-    float noise = sin(vPosition.x * 5.0 + uTime) * sin(vPosition.y * 5.0 + uTime * 0.5) * sin(vPosition.z * 5.0 + uTime * 0.8);
-    vec3 baseColor = mix(color1, color2, sin(uTime * 0.5 + noise) * 0.5 + 0.5);
-    baseColor = mix(baseColor, color3, cos(uTime * 0.3 - noise) * 0.5 + 0.5);
-
-    vec3 finalColor = baseColor + (color1 * fresnelTerm * 2.0);
-    float wire = smoothstep(0.0, 0.02, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-    finalColor += mix(vec3(1.0), vec3(0.0), wire) * 0.5;
-
-    gl_FragColor = vec4(finalColor, 0.85 + fresnelTerm * 0.15);
-  }
-`
-
-const IridescentCore = () => {
-  const meshRef = useRef<THREE.Mesh>(null!)
-  const materialRef = useRef<THREE.ShaderMaterial>(null!)
-
-  const uniforms = useMemo(() => ({ uTime: { value: 0 } }), [])
-
-  useFrame((state) => {
-    const time = state.clock.getElapsedTime()
-    if (meshRef.current) {
-      meshRef.current.rotation.y = time * 0.2
-      meshRef.current.rotation.x = time * 0.1
-      const pulse = Math.sin(time * 15.7) * 0.05 + 1
-      meshRef.current.scale.setScalar(pulse)
-    }
-    if (materialRef.current) materialRef.current.uniforms.uTime.value = time
-  })
-
+// --- 1. HUD: Technical Readouts ---
+const HUD = () => {
   return (
-    <mesh ref={meshRef}>
-      <icosahedronGeometry args={[2.5, 3]} />
-      <shaderMaterial
-        ref={materialRef}
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms}
-        wireframe={true}
-        transparent={true}
-        blending={THREE.AdditiveBlending}
-      />
-    </mesh>
+    <div className="fixed inset-0 z-[1001] pointer-events-none p-6 md:p-10 font-mono text-[9px] uppercase tracking-[0.4em] text-primary/40 hidden sm:block">
+      <div className="absolute top-10 left-10 flex flex-col gap-2">
+        <div className="flex items-center gap-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="glitch-text" data-text="LATENCY: 400MS">LATENCY: 400MS</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary/20" />
+          <span className="opacity-50">ENGINE: GROQ_L3.3_V4</span>
+        </div>
+      </div>
+      
+      <div className="absolute top-10 right-10 text-right flex flex-col gap-2">
+        <div className="glitch-text" data-text="SYNC: ACTIVE">SYNC: ACTIVE</div>
+        <div className="opacity-50">CORE: NEURAL_B1</div>
+      </div>
+
+      <div className="absolute bottom-10 left-10 opacity-30">
+        [51.5284° N, 0.1287° W] // GLOBAL_MESH_ACTIVE
+      </div>
+
+      <div className="absolute bottom-10 right-10 flex gap-10 opacity-60">
+        <span className="glitch-text" data-text="ST_L4_SCOUT">ST_L4_SCOUT</span>
+        <span>X_THREAD_ID: {Math.random().toString(36).substring(7).toUpperCase()}</span>
+      </div>
+    </div>
   )
 }
 
-// --- 2. 3D Tilt Feature Card ---
-const TiltCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string, desc: string, delay: number }) => {
+// --- 2. 3D Kinetic Grid Background ---
+const KineticGrid = () => {
+  const meshRef = useRef<THREE.Points>(null!)
+  const { mouse, viewport } = useThree()
+
+  const count = 50
+  const [positions, initialPositions] = useMemo(() => {
+    const pos = new Float32Array(count * count * 3)
+    const init = new Float32Array(count * count * 3)
+    for (let i = 0; i < count; i++) {
+      for (let j = 0; j < count; j++) {
+        const idx = (i * count + j) * 3
+        pos[idx] = (i - count / 2) * 0.8
+        pos[idx + 1] = -5 // Ground level
+        pos[idx + 2] = (j - count / 2) * 0.8
+        init[idx] = pos[idx]
+        init[idx + 1] = pos[idx + 1]
+        init[idx + 2] = pos[idx + 2]
+      }
+    }
+    return [pos, init]
+  }, [])
+
+  useFrame((state) => {
+    const time = state.clock.getElapsedTime()
+    const pos = meshRef.current.geometry.attributes.position.array as Float32Array
+    
+    for (let i = 0; i < count * count; i++) {
+        const idx = i * 3
+        const x = initialPositions[idx]
+        const z = initialPositions[idx + 2]
+        
+        // Mouse interaction: dip
+        const dist = Math.sqrt(Math.pow(x - mouse.x * viewport.width, 2) + Math.pow(z + mouse.y * viewport.height * 2, 2))
+        const dip = Math.exp(-dist * 0.5) * 2
+        
+        // Wave animation
+        const wave = Math.sin(x * 0.5 + time) * 0.1 + Math.cos(z * 0.5 + time) * 0.1
+        
+        pos[idx + 1] = initialPositions[idx + 1] - dip + wave
+    }
+    meshRef.current.geometry.attributes.position.needsUpdate = true
+    meshRef.current.rotation.y = time * 0.05
+  })
+
+  return (
+    <points ref={meshRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          count={positions.length / 3}
+          array={positions}
+          itemSize={3}
+        />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.05}
+        color="#00F5D4"
+        transparent
+        opacity={0.3}
+        sizeAttenuation
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  )
+}
+
+// --- 3. High-Refraction Tilt Card ---
+const RefractedCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string, desc: string, delay: number }) => {
   const mouseX = useMotionValue(0)
   const mouseY = useMotionValue(0)
 
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [15, -15]), { damping: 30, stiffness: 200 })
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-15, 15]), { damping: 30, stiffness: 200 })
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [15, -15]), { damping: 40, stiffness: 300 })
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-15, 15]), { damping: 40, stiffness: 300 })
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
-    const width = rect.width
-    const height = rect.height
-    const mouseXPos = e.clientX - rect.left
-    const mouseYPos = e.clientY - rect.top
-    const xPct = mouseXPos / width - 0.5
-    const yPct = mouseYPos / height - 0.5
+    const xPct = (e.clientX - rect.left) / rect.width - 0.5
+    const yPct = (e.clientY - rect.top) / rect.height - 0.5
     mouseX.set(xPct)
     mouseY.set(yPct)
   }
@@ -116,36 +130,33 @@ const TiltCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string
     <motion.div
       initial={{ opacity: 0, scale: 0.9, rotateX: 20 }}
       whileInView={{ opacity: 1, scale: 1, rotateX: 0 }}
+      transition={{ delay, duration: 0.8, ease: "circOut" }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ delay, duration: 0.5, ease: "easeOut" }}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       style={{ rotateX, rotateY, transformStyle: "preserve-3d" }}
-      className="relative glass-theater p-12 rounded-[50px] transition-colors duration-500 group hover:bg-white/10 hover:border-primary/40"
+      className="relative group p-12 rounded-[40px] refracted-glass border-highlight overflow-hidden"
     >
       <div 
-        style={{ transform: "translateZ(50px)" }}
-        className="w-20 h-20 rounded-3xl bg-white/5 flex items-center justify-center mb-10 border border-white/5 group-hover:border-primary/40 group-hover:shadow-[0_0_30px_#00F5D440] transition-all"
+        style={{ transform: "translateZ(60px)" }}
+        className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center mb-10 transition-all group-hover:bg-primary/20 border border-primary/20"
       >
-        <Icon className="w-10 h-10 text-primary group-hover:drop-shadow-[0_0_10px_#00F5D4]" />
+        <Icon className="w-12 h-12 text-primary drop-shadow-[0_0_15px_#00F5D4]" />
       </div>
-      <h3 
-        style={{ transform: "translateZ(30px)" }}
-        className="text-3xl font-black mb-6 tracking-tighter uppercase italic drop-shadow-lg"
-      >
+      
+      <h3 style={{ transform: "translateZ(40px)" }} className="text-4xl font-black mb-6 tracking-tighter uppercase italic text-white group-hover:text-primary transition-colors">
         {title}
       </h3>
-      <p 
-        style={{ transform: "translateZ(20px)" }}
-        className="text-white/40 text-lg font-bold leading-relaxed uppercase tracking-tighter group-hover:text-white/70 transition-colors"
-      >
+      
+      <p style={{ transform: "translateZ(30px)" }} className="text-white/40 text-lg font-bold leading-relaxed uppercase tracking-tighter group-hover:text-white/70 transition-colors">
         {desc}
       </p>
 
+      {/* Internal Radial Glow */}
       <motion.div 
-        className="absolute inset-0 z-[-1] rounded-[50px] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none mix-blend-screen"
+        className="absolute inset-0 z-[-1] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
         style={{
-          background: useMotionTemplate`radial-gradient(400px circle at ${useTransform(mouseX, [-0.5, 0.5], [0, 100])}% ${useTransform(mouseY, [-0.5, 0.5], [0, 100])}%, rgba(0, 245, 212, 0.15), transparent 80%)`
+          background: useMotionTemplate`radial-gradient(500px circle at ${useTransform(mouseX, [-0.5, 0.5], [0, 100])}% ${useTransform(mouseY, [-0.5, 0.5], [0, 100])}%, rgba(0, 245, 212, 0.1), transparent 70%)`
         }}
       />
     </motion.div>
@@ -153,220 +164,210 @@ const TiltCard = ({ icon: Icon, title, desc, delay }: { icon: any, title: string
 }
 
 export const LandingPage = () => {
+  const { scrollYProgress } = useScroll()
+  
+  // Parallax Cylinder Transitions
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.2], [1, 0])
+  const heroScale = useTransform(scrollYProgress, [0, 0.2], [1, 0.8])
+  const heroRotate = useTransform(scrollYProgress, [0, 0.2], [0, -20])
+  const heroZ = useTransform(scrollYProgress, [0, 0.2], [0, -500])
+
+  const featureOpacity = useTransform(scrollYProgress, [0.1, 0.3, 0.5], [0, 1, 0])
+  const featureRotate = useTransform(scrollYProgress, [0.1, 0.3, 0.5], [20, 0, -20])
+  const featureY = useTransform(scrollYProgress, [0.1, 0.3, 0.5], [200, 0, -200])
+
   return (
-    <div className="bg-[#020205] text-white selection:bg-primary/40 font-sans min-h-screen flex flex-col" style={{ perspective: '2000px' }}>
+    <div className="bg-[#07070A] text-white selection:bg-primary/40 font-sans min-h-screen overflow-x-hidden" style={{ perspective: '2500px' }}>
       
-      {/* High-Frequency Scanlines Overlay */}
-      <div className="fixed inset-0 z-[999] pointer-events-none opacity-[0.03] mix-blend-overlay bg-[linear-gradient(transparent_50%,_rgba(0,0,0,1)_50%)] bg-[length:100%_4px]" />
+      <HUD />
+      
+      {/* High-Frequency Scanlines */}
+      <div className="fixed inset-0 z-[1002] pointer-events-none opacity-[0.04] mix-blend-overlay bg-[linear-gradient(transparent_50%,_rgba(0,0,0,1)_50%)] bg-[length:100%_4px]" />
 
       <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes iridescent-shimmer {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
+        @keyframes glitch {
+          0% { transform: translate(0); }
+          20% { transform: translate(-2px, 2px); }
+          40% { transform: translate(-2px, -2px); }
+          60% { transform: translate(2px, 2px); }
+          80% { transform: translate(2px, -2px); }
+          100% { transform: translate(0); }
         }
-        .text-iridescent {
-          background: linear-gradient(90deg, #00F5D4, #7000FF, #FF00E5, #00F5D4);
-          background-size: 300% 300%;
+        .glitch-text:hover::after {
+          content: attr(data-text);
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          background: #07070A;
+          animation: glitch 0.1s infinite;
+          clip-path: polygon(0 0, 100% 0, 100% 33%, 0 33%);
+          color: #00F5D4;
+        }
+        .refracted-glass {
+          background: rgba(10, 10, 15, 0.7);
+          backdrop-filter: blur(25px) saturate(160%);
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+        }
+        .border-highlight {
+          border: 1px solid transparent;
+          background: linear-gradient(#07070A, #07070A) padding-box,
+                      linear-gradient(135deg, rgba(0, 245, 212, 0.5) 0%, transparent 40%) border-box;
+        }
+        .text-plasma {
+          background: linear-gradient(90deg, #00F5D4, #B9A7FF, #00F5D4);
+          background-size: 200% auto;
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
-          animation: iridescent-shimmer 8s linear infinite;
+          animation: shimmer 5s linear infinite;
         }
-        .glass-theater {
-          background: rgba(255, 255, 255, 0.02);
-          backdrop-filter: blur(30px) saturate(150%);
-          border: 1px solid rgba(0, 245, 212, 0.1);
-          box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(0, 245, 212, 0.05);
-        }
-        .neon-border {
-          position: relative;
-        }
-        .neon-border::after {
-          content: '';
-          position: absolute;
-          inset: -1px;
-          background: linear-gradient(90deg, transparent, rgba(0,245,212,0.5), transparent);
-          z-index: -1;
-          border-radius: inherit;
+        @keyframes shimmer {
+          to { background-position: 200% center; }
         }
       `}} />
 
-      {/* NAVIGATION */}
-      <nav className="fixed top-8 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-5xl px-6">
-        <div className="glass-theater py-4 px-10 rounded-full flex items-center justify-between neon-border">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="w-8 h-8 bg-primary rounded-lg rotate-45 group-hover:rotate-0 transition-transform duration-500 shadow-[0_0_20px_#00F5D4]" />
-            <span className="font-black text-xl tracking-[0.2em] italic drop-shadow-[0_0_10px_rgba(0,245,212,0.5)]">SMARTSCHOLAR</span>
+      {/* BACKGROUND SCENE */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <Canvas camera={{ position: [0, 2, 10], fov: 45 }}>
+          <ambientLight intensity={1} />
+          <pointLight position={[0, 10, 0]} color="#00F5D4" intensity={5} />
+          <KineticGrid />
+        </Canvas>
+      </div>
+
+      <nav className="fixed top-12 left-1/2 -translate-x-1/2 z-[1000] w-full max-w-5xl px-8 pointer-events-none">
+        <div className="refracted-glass border-highlight py-5 px-12 rounded-full flex items-center justify-between pointer-events-auto">
+          <Link to="/" className="flex items-center gap-4 group">
+            <div className="w-10 h-10 bg-primary rounded-xl rotate-45 group-hover:rotate-0 transition-transform duration-700 shadow-[0_0_30px_#00F5D4]" />
+            <span className="font-black text-2xl tracking-[0.2em] italic text-primary drop-shadow-[0_0_10px_#00F5D450]">SMARTSCHOLAR</span>
           </Link>
-          
-          <div className="hidden md:flex items-center gap-12 text-[9px] font-black uppercase tracking-[0.4em] opacity-80">
-            <span className="text-primary hover:tracking-[0.6em] transition-all cursor-crosshair">Zero-Google</span>
-            <span className="hover:text-primary hover:tracking-[0.6em] transition-all cursor-crosshair">Digital Theater V4</span>
-            <Link to="/auth" className="text-primary hover:text-white transition-all underline decoration-primary/50 underline-offset-8">Login Portal</Link>
+          <div className="hidden md:flex items-center gap-16 text-[10px] font-black uppercase tracking-[0.4em] opacity-80">
+            <Link to="/auth" className="text-primary hover:text-white transition-all underline decoration-primary/40 underline-offset-8">Neural Portal</Link>
           </div>
         </div>
       </nav>
 
-      {/* SECTION 1: HERO (Iridescent Core) */}
-      <section className="relative w-full min-h-screen flex items-center justify-center pt-20 px-6">
-        <div className="absolute inset-0 z-0 opacity-80 mix-blend-screen pointer-events-none">
-          <Canvas camera={{ position: [0, 0, 8], fov: 60 }} gl={{ alpha: true, antialias: true }}>
-            <ambientLight intensity={2} />
-            <pointLight position={[10, 10, 10]} color="#00F5D4" intensity={5} />
-            <pointLight position={[-10, -10, -10]} color="#7000FF" intensity={5} />
-            <IridescentCore />
-          </Canvas>
-        </div>
-
+      {/* SECTION 1: HERO (Cylinder Roll 1) */}
+      <section className="relative h-screen w-full flex items-center justify-center pt-32 px-10 pointer-events-none">
         <motion.div 
-          initial={{ opacity: 0, scale: 0.9, rotateX: 20 }}
-          animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-          transition={{ duration: 1, ease: 'easeOut' }}
-          className="relative z-10 text-center space-y-16 max-w-7xl w-full"
+          style={{ opacity: heroOpacity, scale: heroScale, rotateX: heroRotate, translateZ: heroZ }}
+          className="relative z-10 text-center space-y-20 max-w-7xl pointer-events-auto"
         >
-          <div className="inline-flex items-center gap-4 px-6 py-2 rounded-full glass-theater border-primary/40 text-primary text-[10px] font-black uppercase tracking-[0.5em] mb-4 shadow-[0_0_30px_rgba(0,245,212,0.2)]">
-            <div className="w-2 h-2 rounded-full bg-primary animate-[pulse_400ms_infinite]" />
-            Groq Llama 3.3 Engine Active
-          </div>
+          <motion.div
+            initial={{ opacity: 0, filter: 'blur(30px)', scale: 0.8 }}
+            animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+          >
+            <div className="inline-flex items-center gap-4 px-8 py-3 rounded-full refracted-glass border-highlight text-primary text-xs font-black uppercase tracking-[0.6em] mb-12">
+              <div className="w-2.5 h-2.5 rounded-full bg-primary shadow-[0_0_10px_#00F5D4]" />
+              Establishing Neural Uplink...
+            </div>
 
-          <h1 className="text-6xl md:text-[140px] font-black tracking-tighter leading-[0.8] uppercase italic drop-shadow-2xl">
-            STUDY AT THE <br />
-            <span className="text-iridescent">SPEED OF THOUGHT</span>
-          </h1>
+            <h1 className="text-6xl md:text-[140px] font-black tracking-tighter leading-[0.75] uppercase italic drop-shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+              FOCUS <br />
+              <span className="text-plasma">ENGINE</span>
+            </h1>
+          </motion.div>
           
-          <p className="text-lg md:text-2xl text-white/50 max-w-4xl mx-auto leading-relaxed font-black uppercase tracking-widest italic drop-shadow-md">
-            Transform static syllabi into interactive 3D knowledge graphs. <br />
-            Powered by <span className="text-white drop-shadow-[0_0_8px_#fff]">Groq & Llama 4 Scout</span>, delivered in sub-second inference. <br />
-          </p>
+          <motion.p 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 1, duration: 1 }}
+            className="text-lg md:text-3xl text-white/40 max-w-5xl mx-auto leading-relaxed font-black uppercase tracking-[0.2em] italic"
+          >
+            Materialize your curriculum. <br />
+            Sub-second roadmap generation powered by <br />
+            <span className="text-white drop-shadow-[0_0_10px_#fff]">GROQ & LLAMA 4 SCOUT.</span>
+          </motion.p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-10 pt-10">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.5 }}
+            className="pt-12"
+          >
             <Link to="/auth" className="group relative z-20">
-              <div className="absolute -inset-4 bg-primary/20 rounded-3xl blur-2xl group-hover:bg-primary/50 transition duration-700" />
-              <Button className="relative w-full sm:w-80 h-20 bg-primary text-black hover:bg-white hover:text-black hover:scale-[1.02] transition-all rounded-2xl font-black text-xl uppercase tracking-widest border border-white/20 shadow-[0_0_40px_rgba(0,245,212,0.3)]">
-                INITIALIZE PLATFORM <ChevronRight className="ml-2 w-7 h-7" />
+              <div className="absolute -inset-6 bg-primary/10 rounded-[40px] blur-3xl group-hover:bg-primary/30 transition duration-700" />
+              <Button className="relative w-full sm:w-96 h-24 bg-primary text-black hover:bg-white transition-all rounded-[30px] font-black text-2xl uppercase tracking-[0.15em] shadow-[0_0_50px_rgba(0,245,212,0.4)]">
+                SYNC NEURAL CORE <ChevronRight className="ml-3 w-8 h-8" />
               </Button>
             </Link>
-          </div>
+          </motion.div>
         </motion.div>
       </section>
 
-      {/* SECTION 2: 3D FEATURE GRID */}
-      <section className="relative w-full py-48 px-8 bg-[#020205] overflow-hidden">
-         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,245,212,0.05),transparent_70%)]" />
-         <motion.div 
-           initial={{ opacity: 0, y: 100 }}
-           whileInView={{ opacity: 1, y: 0 }}
-           viewport={{ once: true, margin: "-100px" }}
-           transition={{ duration: 0.8 }}
-           className="w-full max-w-7xl mx-auto relative z-10"
-         >
-           <div className="text-center mb-24">
-             <h2 className="text-4xl md:text-6xl font-black italic uppercase tracking-tighter mb-4"><span className="text-primary">Zero-Google</span> Architecture</h2>
-             <p className="text-white/40 uppercase tracking-[0.4em] font-bold text-sm">Every inference routed through Groq Llama endpoints.</p>
-           </div>
-           
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-12 perspective-[2000px]">
-              <TiltCard icon={Network} title="3D Knowledge Map" desc="Your entire curriculum visualized as a glowing constellation of interconnected nodes via Llama 3.3 struct parsing." delay={0} />
-              <TiltCard icon={Cpu} title="Groq-Speed AI" desc="Sub-second response times for syllabus analysis and dynamic 6-month roadmap generation. Zero lag computation." delay={0.2} />
-              <TiltCard icon={BrainCircuit} title="Vision Grader" desc="Grade handwritten long-form answers instantly with Llama 4 Scout multimodal vision. Unmatched OCR precision." delay={0.4} />
-           </div>
-         </motion.div>
-      </section>
-
-      {/* SECTION 3: THEATER STATS */}
-      <section className="relative w-full py-48 px-8 bg-[#010103] flex justify-center overflow-hidden">
+      {/* SECTION 2: FEATURES (Cylinder Roll 2) */}
+      <section className="relative min-h-screen w-full flex flex-col items-center justify-center py-32 px-12 overflow-visible">
         <motion.div 
-          initial={{ opacity: 0, rotateX: -20, scale: 0.95 }}
-          whileInView={{ opacity: 1, rotateX: 0, scale: 1 }}
-          viewport={{ once: true, margin: "-100px" }}
-          transition={{ duration: 1 }}
-          className="w-full max-w-7xl relative z-10"
+          style={{ opacity: featureOpacity, rotateX: featureRotate, y: featureY }}
+          className="w-full max-w-7xl pt-32"
         >
-          <div className="glass-theater rounded-[80px] p-1 border-primary/20 neon-border">
-              <div className="bg-[#020205]/80 rounded-[79px] p-12 md:p-32 relative overflow-hidden backdrop-blur-3xl">
-                  {/* Background glows */}
-                  <div className="absolute -top-1/2 -right-1/2 w-full h-full bg-primary/20 blur-[180px] rounded-full animate-pulse" />
-                  <div className="absolute -bottom-1/2 -left-1/2 w-full h-full bg-[#7000FF] opacity-20 blur-[180px] rounded-full" />
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-32 items-center relative z-10">
-                      <div className="space-y-12">
-                          <div className="inline-flex items-center gap-3 px-5 py-2 rounded-full glass-theater border-primary/40 text-primary text-[10px] font-black tracking-[0.5em] uppercase">
-                              Spatial Memory Environment
-                          </div>
-                          <h2 className="text-6xl md:text-9xl font-black italic uppercase leading-[0.85] tracking-tighter drop-shadow-lg">
-                              The <span className="text-iridescent">Intelligence</span> <br /> Layer
-                          </h2>
-                          <p className="text-xl text-white/50 leading-relaxed font-black uppercase tracking-widest italic pr-10">
-                              SmartScholar doesn't just store data; it projects it. Our Glassmorphism HUD creates a spatial memory environment that makes complex topics stick 4x faster.
-                          </p>
-                          
-                          <div className="grid grid-cols-2 gap-8">
-                              {[
-                                  { label: 'Latency Target', val: '400ms' },
-                                  { label: 'Logic Core', val: 'Llama 3.3' },
-                                  { label: 'Vision Core', val: 'Llama 4 Scout' },
-                                  { label: 'Inference', val: 'Groq Cloud' }
-                              ].map((stat, i) => (
-                                  <div key={i} className="glass-theater p-8 rounded-3xl border-primary/10 group hover:border-primary/50 transition-all hover:bg-white/5 cursor-crosshair">
-                                      <div className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40 mb-2 group-hover:opacity-100 transition-opacity">{stat.label}</div>
-                                      <div className="text-3xl font-black text-primary italic tracking-tighter drop-shadow-[0_0_15px_rgba(0,245,212,0.4)]">{stat.val}</div>
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                      
-                      <div className="relative flex items-center justify-center">
-                          <motion.div 
-                            animate={{ rotateZ: 360, rotateX: 20, rotateY: 30 }}
-                            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                            className="relative w-full aspect-square max-w-[500px] border border-primary/30 rounded-full flex items-center justify-center p-10 transform-gpu"
-                            style={{ transformStyle: "preserve-3d" }}
-                          >
-                              <div className="absolute top-0 w-6 h-6 bg-primary shadow-[0_0_30px_#00F5D4] rounded-full" style={{ transform: "translateZ(50px)" }} />
-                              <div className="absolute bottom-0 w-6 h-6 bg-[#7000FF] shadow-[0_0_30px_#7000FF] rounded-full" style={{ transform: "translateZ(-50px)" }} />
-                              
-                              <div className="w-full h-full glass-theater rounded-full flex items-center justify-center relative overflow-hidden">
-                                   <Sparkles className="w-40 h-40 text-primary drop-shadow-[0_0_20px_#00F5D4]" />
-                              </div>
-                          </motion.div>
-                      </div>
-                  </div>
-              </div>
+          <div className="text-center mb-32">
+             <h2 className="text-5xl md:text-8xl font-black italic uppercase tracking-tighter mb-6">Deep <span className="text-primary">Intelligence</span></h2>
+             <p className="text-white/30 uppercase tracking-[0.5em] font-bold text-sm">Synchronizing syllabus metadata across distributed nodes.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-16 perspective-[2000px]">
+            <RefractedCard icon={Network} title="Neural Map" desc="Visualize curriculum nodes through Llama 3.3 structured inference. 3D spatial learning paths." delay={0} />
+            <RefractedCard icon={Cpu} title="Groq Inference" desc="0.4s response time for roadmap synthesis. High-frequency computation for high-intensity study." delay={0.2} />
+            <RefractedCard icon={BrainCircuit} title="Llama 4 Vision" desc="OCR Grade handwritten materials with multi-modal precision. The ultimate vision for student success." delay={0.4} />
           </div>
         </motion.div>
       </section>
 
-      {/* FOOTER METADATA */}
-      <footer className="relative z-10 w-full py-32 px-12 border-t border-primary/10 bg-[#000] overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,rgba(112,0,255,0.1),transparent_50%)]" />
-        <div className="max-w-7xl mx-auto flex flex-col items-center gap-20 relative z-10">
-          <div className="flex flex-col items-center gap-10">
-            <motion.div 
-              whileHover={{ rotate: 90, scale: 1.2 }}
-              className="w-16 h-16 bg-primary rounded-2xl rotate-45 flex items-center justify-center shadow-[0_0_40px_#00F5D4] cursor-crosshair transition-transform duration-500"
-            >
-              <Globe className="w-8 h-8 text-black" />
-            </motion.div>
-            <span className="font-black text-5xl tracking-[0.3em] uppercase italic drop-shadow-[0_0_15px_rgba(0,245,212,0.5)]">SMARTSCHOLAR.AI</span>
-            <p className="text-white/30 text-sm font-black uppercase tracking-[1em]">The High-Frequency Study Platform</p>
+      {/* SECTION 3: FINAL CALL */}
+      <section className="relative min-h-[80vh] w-full flex items-center justify-center py-32 px-12">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1 }}
+          viewport={{ once: true }}
+          className="w-full max-w-7xl refracted-glass p-12 md:p-40 rounded-[60px] md:rounded-[100px] border-highlight text-center relative overflow-hidden"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-[#B9A7FF]/10 pointer-events-none" />
+          
+          <div className="relative z-10 space-y-12">
+             <h2 className="text-5xl md:text-[120px] font-black italic uppercase tracking-tighter leading-none">
+                READY TO <br /> <span className="text-primary drop-shadow-[0_0_20px_#00F5D480]">INITIALIZE?</span>
+             </h2>
+             <p className="text-lg md:text-2xl text-white/40 uppercase tracking-widest font-black max-w-3xl mx-auto italic">
+                Join 10k+ students hacking their study productivity with SmartScholar AI.
+             </p>
+             <div className="pt-12">
+               <Link to="/auth" className="inline-block relative group">
+                  <div className="absolute -inset-4 bg-white/20 rounded-full blur-xl group-hover:bg-primary/40 transition duration-700" />
+                  <Button className="relative w-full sm:w-80 h-20 bg-white text-black hover:bg-primary hover:text-black hover:scale-105 transition-all rounded-full font-black text-xl uppercase tracking-widest shadow-[0_0_30px_rgba(255,255,255,0.3)] group-hover:shadow-[0_0_50px_rgba(0,245,212,0.6)]">
+                    ACCESS PORTAL
+                  </Button>
+               </Link>
+             </div>
           </div>
-          
-          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-          
-          <div className="flex flex-col md:flex-row justify-between items-center w-full gap-10">
-            <div className="text-[10px] text-white/30 font-black uppercase tracking-[0.5em] italic">
-              Digital Theater v4.0 // [GROQ_ENABLED] // [LLAMA_4_SCOUT]
-            </div>
+        </motion.div>
+      </section>
 
-            <div className="flex gap-16 text-primary/40 hover:text-primary transition-all duration-700">
-               <Rocket className="w-8 h-8 hover:text-white cursor-crosshair transition-transform hover:-translate-y-2 hover:drop-shadow-[0_0_10px_#fff]" />
-               <ShieldCheck className="w-8 h-8 hover:text-white cursor-crosshair transition-transform hover:-translate-y-2 hover:drop-shadow-[0_0_10px_#fff]" />
-               <BrainCircuit className="w-8 h-8 hover:text-white cursor-crosshair transition-transform hover:-translate-y-2 hover:drop-shadow-[0_0_10px_#fff]" />
+      {/* FOOTER */}
+      <footer className="relative w-full py-40 px-12 border-t border-primary/10 bg-[#07070A] mt-32">
+        <div className="max-w-7xl mx-auto flex flex-col items-center gap-24 relative z-10">
+          <div className="flex flex-col items-center gap-12">
+            <div className="w-20 h-20 bg-primary/20 p-5 rounded-3xl border border-primary/40 animate-pulse">
+               <Globe className="w-full h-full text-primary" />
             </div>
-            
-            <div className="text-[10px] text-white/30 font-black uppercase tracking-widest leading-loose text-right">
-              © 2026 COGNITIVE SYSTEMS <br />
-              <span className="text-primary animate-pulse">NEURAL INTERFACE: ACTIVE</span>
+            <span className="font-black text-4xl md:text-6xl tracking-[0.4em] uppercase italic text-primary/40">SMARTSCHOLAR.AI</span>
+          </div>
+          <div className="w-full h-[1px] bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+          <div className="flex flex-col md:flex-row justify-between items-center w-full gap-16">
+            <div className="text-[10px] md:text-[12px] text-white/20 font-black uppercase tracking-[0.6em] italic text-center md:text-left">
+              ENGINE: V5.0_KINETIC // [ACCESS_GRANTED]
+            </div>
+            <div className="flex gap-12 md:gap-20">
+              <Rocket className="w-8 h-8 md:w-10 md:h-10 text-primary/30 hover:text-primary transition-colors cursor-crosshair hover:drop-shadow-[0_0_10px_#00F5D4]" />
+              <ShieldCheck className="w-8 h-8 md:w-10 md:h-10 text-primary/30 hover:text-primary transition-colors cursor-crosshair hover:drop-shadow-[0_0_10px_#00F5D4]" />
+              <BrainCircuit className="w-8 h-8 md:w-10 md:h-10 text-primary/30 hover:text-primary transition-colors cursor-crosshair hover:drop-shadow-[0_0_10px_#00F5D4]" />
+            </div>
+            <div className="text-[8px] md:text-[10px] text-white/20 font-black uppercase tracking-[0.2em] text-center md:text-right">
+              © 2026 NEURAL SYSTEMS <br />
+              COGNITIVE AUGMENTATION UNIT
             </div>
           </div>
         </div>
