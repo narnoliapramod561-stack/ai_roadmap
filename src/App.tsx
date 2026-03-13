@@ -10,6 +10,7 @@ import { MapPage } from './pages/MapPage'
 import { QuizPage } from './pages/QuizPage'
 import { PlannerPage } from './pages/PlannerPage'
 import { RevisionPage } from './pages/RevisionPage'
+import { TutorPage } from './pages/TutorPage'
 import { GraderPage } from './pages/GraderPage'
 import { ProgressPage } from './pages/ProgressPage'
 
@@ -24,8 +25,9 @@ function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/quiz" element={<QuizPage />} />
           <Route path="/planner" element={<PlannerPage />} />
-          <Route path="/revision" element={<RevisionPage />} />
-          <Route path="/grader" element={<GraderPage />} />
+            <Route path="/revision" element={<RevisionPage />} />
+            <Route path="/tutor" element={<TutorPage />} />
+            <Route path="/grader" element={<GraderPage />} />
           <Route path="/progress" element={<ProgressPage />} />
         </Route>
       </Routes>

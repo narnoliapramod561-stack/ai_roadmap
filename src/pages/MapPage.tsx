@@ -1,61 +1,40 @@
-import { useCallback, useState } from 'react'
-import {
-  ReactFlow,
-  MiniMap,
-  Controls,
-  Background,
-  useNodesState,
-  useEdgesState,
-  MarkerType,
-} from '@xyflow/react'
+import { useState, useCallback } from 'react'
+import { ReactFlow, Background, Controls, MarkerType, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { Link } from 'react-router-dom'
-import { MessageSquare, PlayCircle, Repeat2, PenTool } from 'lucide-react'
+import { MessageSquare, PlayCircle, Repeat2, PenTool, Sparkles } from 'lucide-react'
 
 const initialNodes = [
-  {
-    id: '1',
-    position: { x: 250, y: 50 },
-    data: { label: 'Electromagnetic Theory', mastery: 65, difficulty: 'hard' },
-    style: { background: '#fef08a', color: '#854d0e', border: '1px solid #eab308' }, // Amber - Medium
-  },
-  {
-    id: '2',
-    position: { x: 100, y: 200 },
-    data: { label: 'Maxwell Equations', mastery: 42, difficulty: 'hard' },
-    style: { background: '#fecaca', color: '#991b1b', border: '1px solid #ef4444' }, // Red - Weak
-  },
-  {
-    id: '3',
-    position: { x: 400, y: 200 },
-    data: { label: 'Gauss Law', mastery: 85, difficulty: 'medium' },
-    style: { background: '#bbf7d0', color: '#166534', border: '1px solid #22c55e' }, // Green - Mastered
-  },
-  {
-    id: '4',
-    position: { x: 250, y: 350 },
-    data: { label: 'Ampere Law', mastery: 0, difficulty: 'hard' },
-    style: { background: '#f3f4f6', color: '#374151', border: '1px solid #9ca3af' }, // Gray - New
-  },
+  { id: '1', position: { x: 300, y: 20 },  data: { label: 'Electromagnetic Theory', mastery: 65, difficulty: 'hard' },   style: { background: '#fef08a', color: '#854d0e', border: '2px solid #eab308', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '2', position: { x: 80, y: 160 },  data: { label: 'Maxwell Equations', mastery: 42, difficulty: 'hard' },         style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '3', position: { x: 520, y: 160 }, data: { label: 'Gauss Law', mastery: 85, difficulty: 'medium' },               style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '4', position: { x: 80, y: 310 },  data: { label: 'Ampere Law', mastery: 30, difficulty: 'hard' },                style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '5', position: { x: 300, y: 310 }, data: { label: 'Faraday\'s Law', mastery: 0, difficulty: 'hard' },             style: { background: '#f3f4f6', color: '#374151', border: '2px solid #9ca3af', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '6', position: { x: 520, y: 310 }, data: { label: 'Electric Potential', mastery: 72, difficulty: 'medium' },      style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '7', position: { x: 80, y: 460 },  data: { label: 'Biot-Savart Law', mastery: 15, difficulty: 'hard' },           style: { background: '#fecaca', color: '#991b1b', border: '2px solid #ef4444', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '8', position: { x: 300, y: 460 }, data: { label: 'Wave Equations', mastery: 0, difficulty: 'hard' },             style: { background: '#f3f4f6', color: '#374151', border: '2px solid #9ca3af', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
+  { id: '9', position: { x: 520, y: 460 }, data: { label: 'Capacitance', mastery: 88, difficulty: 'easy' },               style: { background: '#bbf7d0', color: '#166534', border: '2px solid #22c55e', borderRadius: '12px', fontWeight: 'bold', padding: '12px 20px', fontSize: '14px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }},
 ]
 
 const initialEdges = [
-  { id: 'e1-2', source: '1', target: '2', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e1-3', source: '1', target: '3', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e2-4', source: '2', target: '4', markerEnd: { type: MarkerType.ArrowClosed } },
-  { id: 'e3-4', source: '3', target: '4', markerEnd: { type: MarkerType.ArrowClosed } },
+  { id:'e1-2', source:'1', target:'2', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e1-3', source:'1', target:'3', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e2-4', source:'2', target:'4', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e2-5', source:'2', target:'5', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e3-6', source:'3', target:'6', animated: true },
+  { id:'e4-7', source:'4', target:'7', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e5-8', source:'5', target:'8', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e6-9', source:'6', target:'9', markerEnd:{type:MarkerType.ArrowClosed} },
+  { id:'e3-5', source:'3', target:'5', markerEnd:{type:MarkerType.ArrowClosed}, strokeDasharray: '5,5' },
 ]
 
 export const MapPage = () => {
-  const [nodes, _, onNodesChange] = useNodesState(initialNodes)
-  const [edges, __, onEdgesChange] = useEdgesState(initialEdges)
+  const [nodes, , onNodesChange] = useNodesState(initialNodes)
+  const [edges, , onEdgesChange] = useEdgesState(initialEdges)
   const [selectedNode, setSelectedNode] = useState<any>(null)
 
   const onNodeClick = useCallback((_: any, node: any) => {
@@ -63,15 +42,14 @@ export const MapPage = () => {
   }, [])
 
   return (
-    <div className="h-[calc(100vh-10rem)] w-full border rounded-xl overflow-hidden bg-background relative shadow-sm">
-      <div className="absolute top-4 left-4 z-10 bg-background/90 p-3 rounded-lg border shadow-sm backdrop-blur-sm text-sm">
-        <h3 className="font-semibold mb-2">Knowledge Map</h3>
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-green-200 border border-green-500"></span> Mastered</div>
-          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-yellow-200 border border-yellow-500"></span> Medium</div>
-          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-red-200 border border-red-500"></span> Weak</div>
-          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-gray-200 border border-gray-500"></span> New</div>
-        </div>
+    <div className="h-[calc(100vh-100px)] w-full relative">
+      <div className="absolute top-4 left-4 z-10 bg-background/80 backdrop-blur-md p-4 rounded-xl border border-primary/20 shadow-lg max-w-[240px]">
+        <h2 className="font-bold flex items-center gap-2 text-primary">
+          <Sparkles className="w-4 h-4" /> Smart Knowledge Map
+        </h2>
+        <p className="text-[10px] text-muted-foreground mt-1">
+          Each node is a concept extracted from your syllabus. Color shows current AI mastery.
+        </p>
       </div>
 
       <ReactFlow
@@ -81,68 +59,57 @@ export const MapPage = () => {
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}
         fitView
+        className="bg-muted/10"
       >
+        <Background gap={20} size={1} />
         <Controls />
-        <MiniMap />
-        <Background gap={12} size={1} />
       </ReactFlow>
 
-      <Dialog open={!!selectedNode} onOpenChange={() => setSelectedNode(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl flex items-center justify-between">
-              {selectedNode?.data?.label}
-              <span className={`text-xs px-2 py-1 rounded-md uppercase tracking-wider ${
-                selectedNode?.data?.difficulty === 'hard' ? 'bg-red-100 text-red-700' :
-                selectedNode?.data?.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                'bg-green-100 text-green-700'
-              }`}>
-                {selectedNode?.data?.difficulty}
-              </span>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6">
+      {selectedNode && (
+        <Card className="absolute top-4 right-4 z-10 w-80 shadow-2xl border-primary/20 animate-in slide-in-from-right duration-300">
+          <CardHeader className="pb-3 bg-muted/30">
+            <div className="flex justify-between items-start">
+              <Badge variant={selectedNode.data.difficulty === 'hard' ? 'destructive' : 'secondary'}>
+                {selectedNode.data.difficulty.toUpperCase()}
+              </Badge>
+              <button onClick={() => setSelectedNode(null)} className="text-muted-foreground hover:text-foreground">✕</button>
+            </div>
+            <CardTitle className="text-lg pt-2">{selectedNode.data.label}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-4">
             <div className="space-y-2">
-              <div className="flex justify-between text-sm font-medium">
-                <span>Mastery Level</span>
-                <span>{selectedNode?.data?.mastery}%</span>
+              <div className="flex justify-between text-xs font-semibold">
+                <span>AI Mastery</span>
+                <span className="text-primary">{selectedNode.data.mastery}%</span>
               </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div 
-                  className={`h-full ${
-                    selectedNode?.data?.mastery > 70 ? 'bg-green-500' :
-                    selectedNode?.data?.mastery > 40 ? 'bg-yellow-500' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${selectedNode?.data?.mastery}%` }}
-                />
-              </div>
+              <Progress value={selectedNode.data.mastery} className="h-1.5" />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 pt-2">
               <Link to="/tutor" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <MessageSquare className="w-4 h-4 mr-2" /> Explain with AI
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+                  <MessageSquare className="w-3 h-3 mr-2" /> Explain
                 </Button>
               </Link>
               <Link to="/quiz" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <PlayCircle className="w-4 h-4 mr-2" /> Generate Quiz
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+                  <PlayCircle className="w-3 h-3 mr-2" /> Quiz
                 </Button>
               </Link>
               <Link to="/revision" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <Repeat2 className="w-4 h-4 mr-2" /> Add to Revision
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+                  <Repeat2 className="w-3 h-3 mr-2" /> Review
                 </Button>
               </Link>
               <Link to="/grader" className="w-full">
-                <Button variant="outline" className="w-full justify-start">
-                  <PenTool className="w-4 h-4 mr-2" /> Grade Answer
+                <Button variant="outline" size="sm" className="w-full h-8 text-xs font-bold border-primary/20 hover:bg-primary/5">
+                  <PenTool className="w-3 h-3 mr-2" /> Practice
                 </Button>
               </Link>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

@@ -1,129 +1,237 @@
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import { CheckCircle2, XCircle, Timer, AlertCircle } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { motion, AnimatePresence } from 'framer-motion'
+import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Label } from '@/components/ui/label'
 
 const mockQuestions = [
   {
     id: 1,
-    text: "What does Gauss's Law relate?",
-    options: {
-      A: "Magnetic field to its current source",
-      B: "Electric flux to the enclosed charge",
-      C: "Induced EMF to changing magnetic flux",
-      D: "Electric potential to work done"
-    },
-    correct: "B",
-    explanation: "Gauss's law states that the net electric flux through any closed surface is equal to the net charge inside the surface divided by the permittivity of free space."
+    question: "Which of the following is the correct mathematical statement for Gauss's Law in electrostatics?",
+    options: [
+      "∮ E · dA = μ₀ I_enc",
+      "∮ E · dA = Q_enc / ε₀",
+      "∮ B · dA = 0",
+      "∮ E · dl = -dΦ_B / dt"
+    ],
+    correct: 1,
+    explanation: "Gauss's Law states that the electric flux through any closed surface is proportional to the enclosed electric charge.",
+    reasoning: [
+      "Identified core concept: electric flux through a closed surface",
+      "Option B matches Gauss's Law definition — flux = Q_enc / ε₀",
+      "Option A describes Ampere's Law (magnetic field ↔ current)",
+      "Option C describes Gauss's Law for magnetism",
+      "Topic weight: High. Required for Maxwell Eq #1"
+    ]
+  },
+  {
+    id: 2,
+    question: "What happens to the electric field inside a hollow charged conductor?",
+    options: [
+      "It is maximum at the center",
+      "It is zero everywhere inside",
+      "It depends on the radius",
+      "It increases linearly"
+    ],
+    correct: 1,
+    explanation: "Inside a conductor, all excess charge resides on the surface. By Gauss's Law, the field inside is zero.",
+    reasoning: [
+      "Conductor property: static equilibrium",
+      "Charges repel to surface",
+      "Encosed charge in any internal volume is 0",
+      "Conclusion: E = 0"
+    ]
+  },
+  {
+    id: 3,
+    question: "The unit of Electric Flux is:",
+    options: [
+      "Volt",
+      "Newton/Coulomb",
+      "Volt-meter",
+      "Weber"
+    ],
+    correct: 2,
+    explanation: "Electric flux (Φ) = E · A. Since E is V/m and A is m², Φ = (V/m) * m² = Vm.",
+    reasoning: [
+      "Flux formula: E * Area",
+      "Units: (N/C) * m^2 or (V/m) * m^2",
+      "Simplified unit: Volt-meter (Vm)"
+    ]
   }
 ]
 
 export const QuizPage = () => {
-  const [timeLeft, setTimeLeft] = useState(60)
-  const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [selectedOption, setSelectedOption] = useState<number | null>(null)
   const [isSubmitted, setIsSubmitted] = useState(false)
-  
-  const question = mockQuestions[0]
+  const [timeLeft, setTimeLeft] = useState(30)
+  const [score, setScore] = useState(0)
+  const [isFinished, setIsFinished] = useState(false)
+
+  const question = mockQuestions[currentIdx]
 
   useEffect(() => {
-    if (timeLeft > 0 && !isSubmitted) {
-      const timerId = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
-      return () => clearTimeout(timerId)
+    if (timeLeft > 0 && !isSubmitted && !isFinished) {
+      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
+      return () => clearTimeout(timer)
     }
-  }, [timeLeft, isSubmitted])
+  }, [timeLeft, isSubmitted, isFinished])
+
+  const handleSubmit = () => {
+    if (selectedOption === null) return
+    setIsSubmitted(true)
+    if (selectedOption === question.correct) {
+      setScore(s => s + 1)
+    }
+  }
+
+  const handleNext = () => {
+    if (currentIdx < mockQuestions.length - 1) {
+      setCurrentIdx(currentIdx + 1)
+      setSelectedOption(null)
+      setIsSubmitted(false)
+      setTimeLeft(30)
+    } else {
+      setIsFinished(true)
+    }
+  }
+
+  if (isFinished) {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto text-center space-y-8 pt-10">
+        <div className="space-y-4">
+          <div className="inline-flex p-4 rounded-full bg-primary/10 mb-2">
+            <Sparkles className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-4xl font-extrabold tracking-tight">Quiz Complete!</h1>
+          <p className="text-xl text-muted-foreground">You scored {score} out of {mockQuestions.length}</p>
+        </div>
+        
+        <Card className="p-6 border-primary/20 bg-primary/5">
+          <div className="text-lg font-medium mb-2">Topic Mastery: Gauss's Law</div>
+          <Progress value={(score/mockQuestions.length)*100} className="h-3 mb-4" />
+          <p className="text-sm text-muted-foreground">Based on your results, we've updated your Knowledge Map.</p>
+        </Card>
+
+        <div className="flex gap-4 justify-center">
+          <Button size="lg" onClick={() => window.location.reload()}>Retry Quiz</Button>
+          <Button size="lg" variant="outline" onClick={() => window.location.href='/dashboard'}>Go to Dashboard</Button>
+        </div>
+      </motion.div>
+    )
+  }
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex justify-between items-center bg-card p-4 rounded-xl border shadow-sm">
-        <div>
-          <div className="text-sm font-medium text-muted-foreground">Topic: Gauss Law</div>
-          <div className="font-semibold">Question 1 of 10</div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1 space-y-2">
+          <div className="flex justify-between text-sm font-medium">
+            <span>Question {currentIdx + 1} of {mockQuestions.length}</span>
+            <span className="text-primary font-bold">Topic: Electrostatics</span>
+          </div>
+          <Progress value={((currentIdx + 1) / mockQuestions.length) * 100} className="h-2" />
         </div>
-        <div className="flex items-center gap-2 bg-muted px-4 py-2 rounded-lg font-mono font-medium">
-          <Timer className="w-4 h-4 text-primary" />
-          <span className={timeLeft < 10 ? 'text-red-500' : ''}>00:{timeLeft.toString().padStart(2, '0')}</span>
+        <div className={`w-14 h-14 rounded-full border-2 flex items-center justify-center font-bold text-lg shrink-0 ${
+          timeLeft < 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-primary'
+        }`}>
+          <Timer className="w-4 h-4 mr-0.5" /> {timeLeft}
         </div>
       </div>
 
-      <Card className="shadow-lg border-primary/10">
-        <CardHeader>
-          <CardTitle className="text-2xl leading-relaxed">{question.text}</CardTitle>
+      <Card className="shadow-lg border-primary/10 overflow-hidden">
+        <CardHeader className="bg-muted/30 pb-6 border-b">
+          <CardTitle className="leading-relaxed text-xl">{question.question}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
-            {Object.entries(question.options).map(([key, value]) => {
-              const isSelected = selectedOption === key
-              const isCorrect = key === question.correct
-              
-              let buttonStyle = "w-full justify-start h-auto p-4 text-left font-normal border-2 "
-              
-              if (!isSubmitted) {
-                buttonStyle += isSelected ? "border-primary bg-primary/5" : "border-muted hover:border-primary/50"
-              } else {
-                if (isCorrect) buttonStyle += "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
-                else if (isSelected && !isCorrect) buttonStyle += "border-red-500 bg-red-500/10 text-red-700 dark:text-red-400"
-                else buttonStyle += "border-muted opacity-50"
-              }
-
-              return (
-                <Button
-                  key={key}
-                  variant="outline"
-                  className={buttonStyle}
-                  onClick={() => !isSubmitted && setSelectedOption(key)}
-                  disabled={isSubmitted}
-                >
-                  <div className="flex items-start gap-4">
-                    <span className="font-bold font-mono bg-background/50 px-2.5 py-1 rounded border shadow-sm">{key}</span>
-                    <span className="text-base">{value}</span>
-                  </div>
-                </Button>
-              )
-            })}
-          </div>
-
-          <div className="flex justify-between items-center pt-6 border-t">
-            <Button variant="ghost" disabled={isSubmitted}>Skip Question</Button>
-            {!isSubmitted ? (
-              <Button size="lg" onClick={() => setIsSubmitted(true)} disabled={!selectedOption}>
-                Submit Answer
-              </Button>
-            ) : (
-              <Button size="lg">Next Question</Button>
-            )}
-          </div>
+        <CardContent className="pt-8 px-8 pb-8">
+          <RadioGroup 
+            value={selectedOption?.toString()} 
+            onValueChange={(v: string) => setSelectedOption(parseInt(v))}
+            disabled={isSubmitted}
+            className="space-y-4"
+          >
+            {question.options.map((opt, i) => (
+              <div key={i} className={`relative flex items-center space-x-2 rounded-xl border p-4 transition-all hover:bg-muted/50 ${
+                selectedOption === i ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : ''
+              } ${
+                isSubmitted && i === question.correct ? 'border-emerald-500 bg-emerald-50' : ''
+              } ${
+                isSubmitted && selectedOption === i && i !== question.correct ? 'border-red-500 bg-red-50' : ''
+              }`}>
+                <RadioGroupItem value={i.toString()} id={`q${i}`} className="sr-only" />
+                <Label htmlFor={`q${i}`} className="flex-1 cursor-pointer font-medium pl-2">
+                  <span className="mr-3 opacity-50 font-mono">0{i+1}</span> {opt}
+                </Label>
+                {isSubmitted && i === question.correct && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+                {isSubmitted && selectedOption === i && i !== question.correct && <XCircle className="w-5 h-5 text-red-500" />}
+              </div>
+            ))}
+          </RadioGroup>
         </CardContent>
       </Card>
 
-      {/* Explanation Panel */}
-      {isSubmitted && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Card className={`border-l-4 ${selectedOption === question.correct ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg flex items-center gap-2">
-                {selectedOption === question.correct ? (
-                  <><CheckCircle2 className="w-5 h-5 text-emerald-500" /> Correct!</>
-                ) : (
-                  <><XCircle className="w-5 h-5 text-red-500" /> Incorrect</>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-3 text-muted-foreground bg-muted/30 p-4 rounded-lg">
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
-                <div>
-                  <div className="font-medium text-foreground mb-1">AI Explanation</div>
-                  {question.explanation}
+      <div className="flex justify-between items-center h-12">
+        {!isSubmitted ? (
+          <Button 
+            className="w-full h-full text-lg shadow-lg shadow-primary/20" 
+            onClick={handleSubmit}
+            disabled={selectedOption === null}
+          >
+            Submit Answer
+          </Button>
+        ) : (
+          <Button 
+            className="w-full h-full text-lg gap-2" 
+            variant="secondary"
+            onClick={handleNext}
+          >
+            {currentIdx < mockQuestions.length - 1 ? 'Next Question' : 'Finish Quiz'} <ChevronRight className="w-5 h-5" />
+          </Button>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {isSubmitted && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <Card className={`border-l-4 shadow-md ${selectedOption === question.correct ? 'border-l-emerald-500 bg-emerald-50/20' : 'border-l-red-500 bg-red-50/20'}`}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  {selectedOption === question.correct 
+                    ? <><CheckCircle2 className="w-5 h-5 text-emerald-600" /> Correct!</> 
+                    : <><XCircle className="w-5 h-5 text-red-600" /> Incorrect Response</>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-3 text-sm text-foreground/80 bg-background/50 p-4 rounded-xl border">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-primary" />
+                  <div>
+                    <div className="font-bold text-foreground mb-1 uppercase text-xs tracking-wider">AI feedback</div>
+                    <p className="leading-relaxed">{question.explanation}</p>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
+
+                <details className="group">
+                  <summary className="flex items-center gap-2 cursor-pointer text-xs font-bold text-primary uppercase tracking-widest select-none list-none opacity-80 hover:opacity-100 transition">
+                    <span className="w-4 h-4 border border-primary/40 rounded flex items-center justify-center group-open:rotate-90 transition-transform text-primary">›</span>
+                    Show AI Reasoning Chain
+                  </summary>
+                  <div className="mt-4 bg-muted/40 border border-dashed rounded-2xl p-5 space-y-3">
+                    {question.reasoning.map((step, i) => (
+                      <div key={i} className="flex gap-4 text-xs font-medium text-muted-foreground/80">
+                        <span className="font-mono text-primary bg-primary/5 w-6 h-6 flex items-center justify-center rounded shrink-0">0{i+1}</span>
+                        <span className="mt-0.5">{step}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

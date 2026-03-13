@@ -128,6 +128,27 @@ export const GraderPage = () => {
             <Button variant="secondary" className="w-full justify-start h-12 shadow-sm text-base">
               <FileText className="w-5 h-5 mr-3 text-primary" /> View Model Answer
             </Button>
+
+            <details className="group">
+              <summary className="flex items-center gap-2 cursor-pointer text-xs font-bold text-primary uppercase tracking-widest select-none list-none opacity-80 hover:opacity-100 transition">
+                <span className="w-4 h-4 border border-primary/40 rounded flex items-center justify-center group-open:rotate-90 transition-transform text-primary">›</span>
+                Verify AI Scoring Logic
+              </summary>
+              <div className="mt-4 bg-muted/40 border border-dashed rounded-2xl p-5 space-y-3">
+                {[
+                  "Segmented handwriting into 12 semantic blocks",
+                  "Matched 'electric flux' definition with 98% accuracy",
+                  "Detected omission of orthogonality condition in derivation",
+                  "Scored against rubric weight: Concept(50%) + Math(30%) + Structure(20%)",
+                  "Reliability Confidence: 94%"
+                ].map((step, i) => (
+                  <div key={i} className="flex gap-4 text-xs font-medium text-muted-foreground/80">
+                    <span className="font-mono text-primary bg-primary/5 w-6 h-6 flex items-center justify-center rounded shrink-0">0{i+1}</span>
+                    <span className="mt-0.5">{step}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
           </div>
         </motion.div>
       )}
