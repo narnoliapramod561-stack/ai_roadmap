@@ -1,301 +1,359 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle2, XCircle, Timer, ChevronRight, AlertCircle, Sparkles, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { useParams, Link } from 'react-router-dom'
+import {
+  CheckCircle2, XCircle, Timer, ChevronRight, Loader2,
+  Zap, Trophy, RotateCcw, Brain, Target, Clock, TrendingUp
+} from 'lucide-react'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useStudyStore } from '@/stores/useStudyStore'
+import { useUserStore } from '@/stores/useUserStore'
+
+// ── State Machine ─────────────────────────────────────
+type QuizState = 'idle' | 'loading' | 'answering' | 'submitted' | 'results'
 
 export const QuizPage = () => {
   const { topicId } = useParams()
+  const roadmap = useStudyStore(s => s.roadmap)
+  const user = useUserStore(s => s.user)
+
+  const currentTopic = topicId ? roadmap.find(t => t.id === topicId) : roadmap[0]
+
+  // State Machine
+  const [phase, setPhase] = useState<QuizState>('idle')
   const [questions, setQuestions] = useState<any[]>([])
-  const [currentIdx, setCurrentIdx] = useState(0)
-  const [selectedOption, setSelectedOption] = useState<number | null>(null)
-  const [isSubmitted, setIsSubmitted] = useState(false)
-  const [timeLeft, setTimeLeft] = useState(30)
-  const [score, setScore] = useState(0)
-  const [isFinished, setIsFinished] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [quizId, setQuizId] = useState<string | null>(null)
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
+  const [questionCount, setQuestionCount] = useState(5)
 
-  const roadmap = useStudyStore(state => state.roadmap)
-  const currentTopic = topicId 
-    ? roadmap.find(t => t.id === topicId) 
-    : roadmap[0]
+  // Answering state
+  const [currentIdx, setCurrentIdx] = useState(0)
+  const [userAnswers, setUserAnswers] = useState<number[]>([])
+  const [selectedOption, setSelectedOption] = useState<number | null>(null)
+  const [timeLeft, setTimeLeft] = useState(30)
+  const [timerActive, setTimerActive] = useState(false)
 
+  // Results state
+  const [results, setResults] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Timer effect
   useEffect(() => {
-    const loadQuiz = async () => {
-      if (!currentTopic) {
-        setIsLoading(false)
-        setError('No topic available. Please upload a material first.')
-        return
-      }
-      try {
-        setError(null)
-        const result = await api.generateQuiz(currentTopic.id, 5, 'medium', currentTopic.label)
-        if (result.error) {
-          setError(result.error);
-          return;
-        }
-        setQuestions(result.questions || [])
-        setQuizId(result.quiz_id)
-      } catch (err: any) {
-        console.error('Quiz generation error:', err)
-        setError(err.message || 'Failed to generate quiz. Please try again.')
-      } finally {
-        setIsLoading(false)
-      }
+    if (!timerActive || phase !== 'answering') return
+    if (timeLeft <= 0) {
+      handleAnswer(-1) // Auto-submit on timeout
+      return
     }
-    loadQuiz()
-  }, [currentTopic])
+    const tick = setTimeout(() => setTimeLeft(t => t - 1), 1000)
+    return () => clearTimeout(tick)
+  }, [timeLeft, timerActive, phase])
 
-  const question = questions.length > 0 ? questions[currentIdx] : null
-
-  useEffect(() => {
-    if (timeLeft > 0 && !isSubmitted && !isFinished && !isLoading) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [timeLeft, isSubmitted, isFinished, isLoading])
-
-  const handleSubmit = async () => {
-    if (selectedOption === null || !quizId || !currentTopic) return
-    setIsSubmitted(true)
-    
-    if (selectedOption === question.correct) {
-      setScore(s => s + 1)
-    }
-  }
-
-  const handleNext = async () => {
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(currentIdx + 1)
-      setSelectedOption(null)
-      setIsSubmitted(false)
+  const startQuiz = useCallback(async () => {
+    setPhase('loading')
+    setError(null)
+    try {
+      const topicLabel = currentTopic?.label || topicId || 'General Knowledge'
+      const result = await api.generateQuizFull(
+        topicId || 'general',
+        topicLabel,
+        undefined,
+        user?.id,
+        questionCount,
+        difficulty
+      )
+      if (result.error) throw new Error(result.error)
+      setQuestions(result.questions || [])
+      setQuizId(result.quiz_id)
+      setUserAnswers([])
+      setCurrentIdx(0)
+      setPhase('answering')
       setTimeLeft(30)
+      setTimerActive(true)
+    } catch (err: any) {
+      setError(err.message || 'Failed to generate quiz')
+      setPhase('idle')
+    }
+  }, [topicId, currentTopic, user?.id, questionCount, difficulty])
+
+  const handleAnswer = useCallback((optionIdx: number) => {
+    setTimerActive(false)
+    setSelectedOption(optionIdx)
+    setPhase('submitted')
+  }, [])
+
+  const nextQuestion = useCallback(() => {
+    const newAnswers = [...userAnswers, selectedOption ?? -1]
+    setUserAnswers(newAnswers)
+
+    if (currentIdx + 1 >= questions.length) {
+      // Submit quiz
+      submitQuiz(newAnswers)
     } else {
-      if (quizId && currentTopic) {
-        const userAnswers = questions.map((_, i) => i === currentIdx ? selectedOption : -1)
-        await api.submitQuiz(quizId, userAnswers as number[], currentTopic.id)
-      }
-      setIsFinished(true)
+      setCurrentIdx(i => i + 1)
+      setSelectedOption(null)
+      setPhase('answering')
+      setTimeLeft(30)
+      setTimerActive(true)
+    }
+  }, [userAnswers, selectedOption, currentIdx, questions.length])
+
+  const submitQuiz = async (answers: number[]) => {
+    setPhase('loading')
+    try {
+      const result = await api.submitQuizFull(
+        quizId!,
+        answers,
+        topicId || 'general',
+        currentTopic?.label || topicId || 'General',
+        user?.id,
+        difficulty
+      )
+      setResults(result)
+      setPhase('results')
+    } catch (err: any) {
+      // If submit fails, show local results
+      const correct = answers.filter((a, i) => a === questions[i]?.correct).length
+      setResults({ score: correct, total: questions.length, score_pct: Math.round((correct / questions.length) * 100), feedback: [] })
+      setPhase('results')
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
-        <Loader2 className="w-10 h-10 text-primary animate-spin" />
-        <p className="text-muted-foreground font-medium">AI generating personalized quiz...</p>
-      </div>
-    )
+  const resetQuiz = () => {
+    setPhase('idle')
+    setResults(null)
+    setError(null)
+    setUserAnswers([])
+    setSelectedOption(null)
+    setCurrentIdx(0)
   }
 
-  if (!currentTopic && !isLoading) {
-    return (
-      <div className="text-center py-20 px-6">
-        <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-        <h2 className="text-2xl font-bold">No Material Found</h2>
-        <p className="text-muted-foreground mb-6">Please upload a syllabus first to generate study quizzes.</p>
-        <Link to="/upload">
-          <Button>Go to Upload</Button>
-        </Link>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="max-w-2xl mx-auto py-20 px-6 space-y-6">
-        <div className="flex items-center gap-3 p-4 bg-destructive/10 text-destructive rounded-xl border border-destructive/20">
-          <AlertCircle className="w-6 h-6 shrink-0" />
-          <div>
-            <h3 className="font-semibold">Quiz Generation Failed</h3>
-            <p className="text-sm mt-1">{error}</p>
-          </div>
-        </div>
-        <div className="flex gap-4 justify-center">
-          <Button onClick={() => {
-            setError(null)
-            setIsLoading(true)
-            window.location.reload()
-          }}>Try Again</Button>
-          <Link to="/map">
-            <Button variant="outline">Back to Map</Button>
-          </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (isFinished) {
-    return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-2xl mx-auto text-center space-y-8 pt-10">
-        <div className="space-y-4">
-          <div className="inline-flex p-4 rounded-full bg-primary/10 mb-2">
-            <Sparkles className="w-10 h-10 text-primary" />
-          </div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Quiz Complete!</h1>
-          <p className="text-xl text-muted-foreground">You scored {score} out of {questions.length}</p>
-        </div>
-        
-        <Card className="p-6 border-primary/20 bg-primary/5">
-          <div className="text-lg font-medium mb-2">Topic Mastery: {currentTopic?.label}</div>
-          <Progress value={(score/questions.length)*100} className="h-3 mb-4" />
-          <p className="text-sm text-muted-foreground">Based on your results, we've updated your Knowledge Map.</p>
-        </Card>
-
-        <div className="flex gap-4 justify-center">
-          <Button size="lg" onClick={() => window.location.reload()}>Retry Quiz</Button>
-          <Link to="/map">
-            <Button size="lg" variant="outline">View Progress Map</Button>
-          </Link>
-        </div>
-      </motion.div>
-    )
-  }
-  if (!question && !isLoading && !error && !isFinished) {
-    return (
-      <div className="text-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-primary" />
-        <p>Preparing questions...</p>
-      </div>
-    )
-  }
+  const q = questions[currentIdx]
+  const scorePct = results ? results.score_pct ?? Math.round((results.score / results.total) * 100) : 0
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10">
-      <div className="flex items-center justify-between gap-8 glass p-6 rounded-[32px] border-white/5 shadow-xl">
-        <div className="flex-1 space-y-4">
-          <div className="flex justify-between text-[10px] font-black uppercase tracking-[0.2em] opacity-50">
-            <span>Progress: {currentIdx + 1} / {questions.length}</span>
-            <span className="text-primary text-glow-teal">Module: {currentTopic?.label}</span>
+    <div className="max-w-3xl mx-auto space-y-10 pb-20">
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-1.5">
+            <Brain className="w-3 h-3" /> Neural Quiz Engine
           </div>
-          <Progress value={((currentIdx + 1) / questions.length) * 100} className="h-1 bg-white/5" />
         </div>
-        <div className={`w-16 h-16 rounded-[20px] glass border-white/10 flex flex-col items-center justify-center shrink-0 shadow-lg ${
-          timeLeft < 10 ? 'border-red-500/50 text-red-500 animate-pulse' : 'text-primary'
-        }`}>
-          <Timer className="w-4 h-4 mb-1" />
-          <span className="text-lg font-black tracking-tighter">{timeLeft}</span>
-        </div>
-      </div>
+        <h1 className="text-4xl font-black tracking-tighter uppercase italic text-white">
+          {currentTopic?.label || 'Quiz'} <span className="text-primary">Assessment</span>
+        </h1>
+        <p className="text-white/40 text-sm font-bold uppercase tracking-widest mt-1">
+          Adaptive MCQ — SM-2 Powered
+        </p>
+      </motion.div>
 
-      <Card className="glass-card rounded-[40px] border-white/10 overflow-hidden shadow-2xl relative">
-        <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-right from-primary/0 via-primary/40 to-primary/0" />
-        <CardHeader className="bg-white/[0.02] py-8 px-10 border-b border-white/5">
-          <CardTitle className="leading-tight text-2xl font-black tracking-tight text-white/90 italic">{question.question}</CardTitle>
-        </CardHeader>
-        <CardContent className="py-10 px-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {question?.options?.map((opt: string, i: number) => (
-              <div 
-                key={i} 
-                onClick={() => !isSubmitted && setSelectedOption(i)}
-                className={`group relative flex items-center rounded-3xl border p-6 transition-all select-none ${
-                  !isSubmitted ? 'cursor-pointer' : 'cursor-default'
-                } ${
-                  selectedOption === i && !isSubmitted ? 'border-primary bg-primary/5 shadow-[0_0_30px_rgba(0,245,212,0.1)]' : 
-                  selectedOption !== i && !isSubmitted ? 'border-white/5 hover:bg-white/5 hover:border-white/15' : ''
-                } ${
-                  isSubmitted && i === question.correct ? 'border-emerald-500/50 bg-emerald-500/10' : ''
-                } ${
-                  isSubmitted && selectedOption === i && i !== question.correct ? 'border-red-500/50 bg-red-500/10' : ''
-                } ${
-                  isSubmitted && selectedOption === i && i === question.correct ? 'border-emerald-500/50 bg-emerald-500/10' : ''
-                }`}
-              >
-                <div className="flex items-start gap-4 flex-1 pointer-events-none">
-                  <span className={`text-[10px] font-black uppercase tracking-widest shrink-0 mt-0.5 transition-colors ${
-                    selectedOption === i ? 'text-primary' : 'text-white/20 group-hover:text-white/60'
-                  }`}>0{i+1}</span>
-                  <span className={`font-bold text-sm tracking-tight leading-snug transition-colors ${
-                    selectedOption === i ? 'text-white' : 'text-white/60 group-hover:text-white/90'
-                  }`}>{opt}</span>
-                </div>
-                <div className="shrink-0 ml-3 pointer-events-none">
-                  {isSubmitted && i === question.correct && <CheckCircle2 className="w-5 h-5 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.4)]" />}
-                  {isSubmitted && selectedOption === i && i !== question.correct && <XCircle className="w-5 h-5 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]" />}
+      <AnimatePresence mode="wait">
+        {/* ── IDLE ── */}
+        {phase === 'idle' && (
+          <motion.div key="idle" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            {error && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-bold">
+                {error}
+              </div>
+            )}
+
+            <div className="bg-white/5 border border-white/10 rounded-[30px] p-8 space-y-8">
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Difficulty Level</label>
+                <div className="flex gap-3">
+                  {(['easy', 'medium', 'hard'] as const).map(d => (
+                    <button key={d} onClick={() => setDifficulty(d)}
+                      className={`flex-1 py-3 rounded-2xl font-black uppercase tracking-widest text-xs border transition-all ${
+                        difficulty === d
+                          ? d === 'easy' ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'
+                            : d === 'medium' ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
+                            : 'bg-red-500/20 border-red-500/50 text-red-400'
+                          : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                      }`}
+                    >{d}</button>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
-      <div className="flex justify-center items-center h-20">
-        <AnimatePresence mode="wait">
-          {!isSubmitted ? (
-            <motion.div key="submit" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full">
-              <Button 
-                className="w-full h-16 text-[10px] font-black uppercase tracking-[0.3em] bg-primary text-black rounded-[24px] shadow-2xl shadow-primary/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30" 
-                onClick={handleSubmit}
-                disabled={selectedOption === null}
-              >
-                Execute Analysis
-              </Button>
-            </motion.div>
-          ) : (
-            <motion.div key="next" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="w-full">
-              <Button 
-                className="w-full h-16 text-[10px] font-black uppercase tracking-[0.3em] glass border-white/20 text-white rounded-[24px] hover:bg-white/10 transition-all flex gap-3" 
-                onClick={handleNext}
-              >
-                {currentIdx < questions.length - 1 ? 'Compute Next Phase' : 'Finalize Session'} <ChevronRight className="w-5 h-5" />
-              </Button>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <AnimatePresence>
-        {isSubmitted && (
-          <motion.div initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
-            <Card className={`rounded-[40px] glass border-white/10 overflow-hidden shadow-2xl ${selectedOption === question.correct ? 'shadow-emerald-900/10' : 'shadow-red-900/10'}`}>
-              <CardHeader className="pb-4 py-8 px-10 border-b border-white/5 bg-white/[0.01]">
-                <CardTitle className="text-sm font-black uppercase tracking-[0.2em] flex items-center gap-4">
-                  {selectedOption === question.correct 
-                    ? <><div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center"><CheckCircle2 className="w-5 h-5 text-emerald-500" /></div> <span className="text-emerald-500">Validation Successful</span></> 
-                    : <><div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center"><XCircle className="w-5 h-5 text-red-500" /></div> <span className="text-red-500">Logic Mismatch Detected</span></>}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="py-10 px-10 space-y-10">
-                <div className="flex gap-6 items-start glass p-8 rounded-[32px] border-white/5 relative group">
-                  <div className="absolute inset-0 bg-primary/5 rounded-[32px] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <Sparkles className="w-8 h-8 shrink-0 text-primary text-glow-teal mt-1" />
-                  <div>
-                    <div className="font-black text-[10px] text-primary mb-3 uppercase tracking-widest leading-none">AI Insight Engine</div>
-                    <p className="text-lg font-bold tracking-tight text-white/80 leading-relaxed">{question.explanation}</p>
-                  </div>
+              <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Number of Questions</label>
+                <div className="flex gap-3">
+                  {[5, 10, 15].map(n => (
+                    <button key={n} onClick={() => setQuestionCount(n)}
+                      className={`flex-1 py-3 rounded-2xl font-black text-sm border transition-all ${
+                        questionCount === n ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-white/5 border-white/10 text-white/40 hover:border-white/20'
+                      }`}
+                    >{n} Q</button>
+                  ))}
                 </div>
+              </div>
+            </div>
 
-                <div className="space-y-6 border-t border-white/5 pt-10">
-                  <div className="flex items-center gap-3">
-                    <div className="h-px flex-1 bg-white/5" />
-                    <span className="text-[9px] font-black uppercase tracking-[0.4em] text-white/20 italic">Internal Reasoning Trace</span>
-                    <div className="h-px flex-1 bg-white/5" />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 gap-4">
-                    {question.ai_reasoning?.map((step: string, i: number) => (
-                      <motion.div 
-                        initial={{ opacity: 0, x: -20 }} 
-                        animate={{ opacity: 1, x: 0 }} 
-                        transition={{ delay: i * 0.1 }}
-                        key={i} 
-                        className="flex gap-6 p-6 rounded-[24px] bg-white/[0.02] border border-white/5 hover:border-white/10 transition-colors"
-                      >
-                        <span className="font-black text-[10px] text-primary/40 bg-white/5 w-8 h-8 flex items-center justify-center rounded-xl shrink-0 tracking-tighter">0{i+1}</span>
-                        <span className="text-xs font-bold text-white/50 leading-relaxed group-hover:text-white/80 transition-colors uppercase tracking-wider">{step}</span>
-                      </motion.div>
-                    ))}
-                  </div>
+            <button onClick={startQuiz}
+              className="w-full py-6 bg-primary text-black font-black uppercase tracking-[0.3em] text-lg rounded-[24px] hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_40px_rgba(0,245,212,0.3)] flex items-center justify-center gap-3"
+            >
+              <Zap className="w-6 h-6" /> Initialize Assessment
+            </button>
+          </motion.div>
+        )}
+
+        {/* ── LOADING ── */}
+        {phase === 'loading' && (
+          <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="py-32 flex flex-col items-center gap-6"
+          >
+            <div className="w-20 h-20 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
+            <div className="text-xs font-black uppercase tracking-[0.4em] text-primary animate-pulse">
+              {results ? 'Submitting Results...' : 'Generating Questions...'}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── ANSWERING / SUBMITTED ── */}
+        {(phase === 'answering' || phase === 'submitted') && q && (
+          <motion.div key={`q-${currentIdx}`} initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}
+            className="space-y-8"
+          >
+            {/* Progress + Timer */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden border border-white/10">
+                <motion.div className="h-full bg-primary" animate={{ width: `${((currentIdx + 1) / questions.length) * 100}%` }} transition={{ ease: 'easeOut' }} />
+              </div>
+              <div className={`flex items-center gap-2 font-black text-sm tabular-nums ${timeLeft <= 10 ? 'text-red-400 animate-pulse' : 'text-white/60'}`}>
+                <Timer className="w-4 h-4" /> {timeLeft}s
+              </div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-white/30">
+                {currentIdx + 1} / {questions.length}
+              </div>
+            </div>
+
+            {/* Question Card */}
+            <div className="bg-white/5 border border-white/10 rounded-[30px] p-8 space-y-8">
+              <h2 className="text-xl font-bold text-white leading-relaxed">{q.question}</h2>
+
+              <div className="grid gap-3">
+                {q.options?.map((opt: string, idx: number) => {
+                  const isSelected = selectedOption === idx
+                  const correct = q.correct
+                  const isCorrect = phase === 'submitted' && idx === correct
+                  const isWrong = phase === 'submitted' && isSelected && idx !== correct
+
+                  return (
+                    <motion.button key={idx} whileHover={phase === 'answering' ? { x: 4 } : {}}
+                      onClick={() => phase === 'answering' && handleAnswer(idx)}
+                      className={`w-full text-left p-5 rounded-2xl border font-medium transition-all relative overflow-hidden ${
+                        isCorrect ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                        : isWrong ? 'bg-red-500/20 border-red-500/50 text-red-300'
+                        : isSelected && phase === 'submitted' ? 'bg-white/10 border-white/20 text-white'
+                        : phase === 'answering' ? 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:border-primary/30 cursor-pointer'
+                        : 'bg-white/5 border-white/5 text-white/30 cursor-not-allowed'
+                      }`}
+                    >
+                      <span className="flex items-center gap-4">
+                        <span className="w-8 h-8 rounded-xl bg-white/10 flex items-center justify-center text-xs font-black shrink-0">
+                          {['A','B','C','D'][idx]}
+                        </span>
+                        {opt}
+                        {isCorrect && <CheckCircle2 className="w-5 h-5 text-emerald-400 ml-auto shrink-0" />}
+                        {isWrong && <XCircle className="w-5 h-5 text-red-400 ml-auto shrink-0" />}
+                      </span>
+                    </motion.button>
+                  )
+                })}
+              </div>
+
+              {/* AI Reasoning Panel  */}
+              {phase === 'submitted' && (
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                  className="bg-primary/5 border border-primary/20 rounded-2xl p-6 space-y-3"
+                >
+                  <div className="text-[10px] font-black uppercase tracking-[0.3em] text-primary">AI Reasoning</div>
+                  <p className="text-sm text-white/70 leading-relaxed">{q.explanation}</p>
+                  {q.ai_reasoning?.length > 0 && (
+                    <ul className="space-y-1 pt-2 border-t border-primary/10">
+                      {q.ai_reasoning.map((r: string, i: number) => (
+                        <li key={i} className="text-[11px] text-white/40 flex gap-2"><span className="text-primary">·</span>{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                </motion.div>
+              )}
+
+              {phase === 'submitted' && (
+                <button onClick={nextQuestion}
+                  className="w-full py-4 bg-primary text-black font-black uppercase tracking-widest rounded-2xl hover:bg-white transition-all flex items-center justify-center gap-3"
+                >
+                  {currentIdx + 1 >= questions.length ? 'See Results' : 'Next Question'}
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── RESULTS ── */}
+        {phase === 'results' && results && (
+          <motion.div key="results" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="space-y-8"
+          >
+            {/* Score Card */}
+            <div className={`rounded-[30px] p-10 text-center relative overflow-hidden border ${
+              scorePct >= 80 ? 'bg-emerald-500/10 border-emerald-500/30' :
+              scorePct >= 50 ? 'bg-yellow-500/10 border-yellow-500/30' :
+              'bg-red-500/10 border-red-500/30'
+            }`}>
+              <div className="text-7xl font-black italic tracking-tighter mb-2" style={{
+                color: scorePct >= 80 ? '#34d399' : scorePct >= 50 ? '#fbbf24' : '#f87171'
+              }}>
+                {scorePct}<span className="text-3xl">%</span>
+              </div>
+              <div className="text-lg font-black uppercase tracking-widest text-white/80 mb-1">
+                {scorePct >= 80 ? '🏆 Mastered' : scorePct >= 50 ? '⚡ Progressing' : '📚 Keep Studying'}
+              </div>
+              <div className="text-white/40 text-sm font-bold uppercase tracking-widest">
+                {results.score} correct out of {results.total} questions
+              </div>
+              {results.next_review_interval_days && (
+                <div className="mt-4 text-[10px] font-black uppercase tracking-widest text-primary">
+                  SM-2 Next Review: in {results.next_review_interval_days} day{results.next_review_interval_days !== 1 ? 's' : ''}
                 </div>
-              </CardContent>
-            </Card>
+              )}
+            </div>
+
+            {/* Feedback List */}
+            {results.feedback && results.feedback.length > 0 && (
+              <div className="space-y-4">
+                <div className="text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Question Breakdown</div>
+                {results.feedback.map((fb: any, i: number) => (
+                  <div key={i} className={`p-5 rounded-2xl border text-sm font-medium ${fb.is_correct ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-red-500/5 border-red-500/20'}`}>
+                    <div className="flex items-start gap-3">
+                      {fb.is_correct ? <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" /> : <XCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />}
+                      <div>
+                        <p className="text-white/80">{fb.question}</p>
+                        {!fb.is_correct && <p className="text-[11px] text-emerald-400 mt-1">✓ {fb.correct_answer}</p>}
+                        {fb.explanation && <p className="text-[11px] text-white/40 mt-1">{fb.explanation}</p>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-4">
+              <button onClick={resetQuiz}
+                className="flex-1 py-4 bg-white/5 border border-white/10 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" /> Retry Quiz
+              </button>
+              <Link to="/dashboard" className="flex-1">
+                <button className="w-full py-4 bg-primary text-black font-black uppercase tracking-widest rounded-2xl hover:bg-white transition-all flex items-center justify-center gap-2">
+                  <TrendingUp className="w-4 h-4" /> See Readiness
+                </button>
+              </Link>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

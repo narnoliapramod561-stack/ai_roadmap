@@ -102,47 +102,39 @@ async def upload_material(
     norm_user_id = normalize_user_id(user_id)
     
     if db:
+        # Use correct column names matching the DB schema
         full_data = {
             "id": material_id,
             "user_id": norm_user_id,
-            "filename": filename,
+            "file_name": filename,       # DB column: file_name
+            "subject": subject_name,     # DB column: subject
             "raw_text": text,
-            "subject_name": subject_name,
+            "ai_roadmap": analysis_result,
+            "knowledge_graph": analysis_result.get("knowledge_graph"),
             "exam_date": exam_date
         }
         
         try:
-            # 1. Full Insert (Best case)
             db.table("study_materials").insert(full_data).execute()
+            print(f"Material saved successfully: {material_id}")
         except Exception as full_err:
             error_str = str(full_err).lower()
             print(f"Full insert failed: {full_err}")
             
-            # 2. Resilient Fallback (Handle missing subject_name or exam_date columns)
-            # If the error relates to a column, try minimal insert
             if "column" in error_str:
-                print("Detected missing column in schema. Switching to minimal resilient insert...")
-                resilient_filename = f"{subject_name} - {filename}"
-                resilient_data = {
-                    "id": material_id,
-                    "user_id": norm_user_id,
-                    "filename": resilient_filename,
-                    "raw_text": text
-                }
-                try:
-                    db.table("study_materials").insert(resilient_data).execute()
-                    print("Minimal resilient insert successful.")
-                except Exception as res_err:
-                    print(f"Resilient fallback failed: {res_err}")
-                    # Attempt Ultra-Minimal
-                    ultra_minimal_data = {"id": material_id, "filename": resilient_filename, "raw_text": text}
+                # Graceful column fallback
+                print("Column mismatch — trying minimal insert...")
+                for attempt_data in [
+                    {"id": material_id, "user_id": norm_user_id, "file_name": filename, "subject": subject_name, "raw_text": text},
+                    {"id": material_id, "file_name": filename, "raw_text": text},
+                    {"id": material_id, "raw_text": text},
+                ]:
                     try:
-                        db.table("study_materials").insert(ultra_minimal_data).execute()
-                    except:
-                        pass
-            else:
-                # Other error (like RLS), already handled by the general return below
-                pass
+                        db.table("study_materials").insert(attempt_data).execute()
+                        print(f"Fallback insert OK with {list(attempt_data.keys())}")
+                        break
+                    except Exception as fe:
+                        print(f"Fallback attempt failed: {fe}")
                 
         # 3. Store Extracted Topics
         try:

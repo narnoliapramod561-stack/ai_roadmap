@@ -217,4 +217,66 @@ export const api = {
 
     return response.json();
   },
+
+  // ── Readiness Score ───────────────────────────────────
+  async getReadinessScore(userId: string, materialId?: string) {
+    const url = new URL(`${API_BASE_URL}/readiness/score`);
+    url.searchParams.set('user_id', userId);
+    if (materialId) url.searchParams.set('material_id', materialId);
+    const response = await fetchWithRetry(url.toString());
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  // ── Quiz History ──────────────────────────────────────
+  async getQuizHistory(userId: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/quiz/history?user_id=${userId}`);
+    if (!response.ok) return [];
+    return response.json();
+  },
+
+  async generateQuizFull(topicId: string, topicLabel: string, materialId?: string, userId?: string, count = 5, difficulty = 'medium') {
+    const response = await fetchWithRetry(`${API_BASE_URL}/quiz/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic_id: topicId, topic_label: topicLabel, material_id: materialId, user_id: userId, count, difficulty }),
+    });
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  async submitQuizFull(quizId: string, userAnswers: number[], topicId: string, topicName: string, userId?: string, difficulty?: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/quiz/${quizId}/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quiz_id: quizId, user_answers: userAnswers, topic_id: topicId, topic_name: topicName, user_id: userId, difficulty }),
+    });
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  // ── Spaced Repetition ─────────────────────────────────
+  async getSpacedRepetitionQueue(userId: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/spaced-repetition/queue?user_id=${userId}`);
+    if (!response.ok) return { queue: [] };
+    return response.json();
+  },
+
+  async getOverdueTopics(userId: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/spaced-repetition/overdue?user_id=${userId}`);
+    if (!response.ok) return { overdue: [] };
+    return response.json();
+  },
+
+  // ── AI Explain ────────────────────────────────────────
+  async explainTopic(topic: string, question: string, materialId?: string, userId?: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/ai/explain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, question, material_id: materialId, user_id: userId }),
+    });
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
 };
+

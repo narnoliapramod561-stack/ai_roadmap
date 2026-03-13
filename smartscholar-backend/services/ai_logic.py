@@ -3,6 +3,7 @@ import os
 import json
 import asyncio
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv(override=True)
 
@@ -38,6 +39,10 @@ async def analyze_syllabus(raw_text: str):
     Return ONLY a JSON object with this exact structure:
     {{
       "total_topics": number,
+      "topics": [
+        {{ "name": "Topic Name", "difficulty": "easy|medium|hard", "subtopics": ["Sub 1", "Sub 2"] }},
+        ...
+      ],
       "knowledge_graph": {{
         "nodes": [
           {{ "id": "1", "label": "Topic Name", "mastery": 0, "difficulty": "easy|medium|hard" }},
@@ -49,7 +54,7 @@ async def analyze_syllabus(raw_text: str):
         ]
       }},
       "subtopics": {{
-        "Topic Name": ["Subtopic 1", "Subtopic 2", ...]
+        "Topic Name": ["Subtopic 1", "Subtopic 2"]
       }}
     }}
     
@@ -88,9 +93,16 @@ async def generate_mcqs(topic: str, context: str = "", count: int = 5, difficult
         return data
     return data.get("questions", data)
 
-from datetime import datetime
 
-async def generate_schedule(exam_date: str, timeframe: str = "daily", daily_hours: float = 4.0, weak_topics: list = [], study_intervals: list = [], syllabus_topics: list = [], past_completed_topics: list = []):
+async def generate_schedule(
+    exam_date: str,
+    timeframe: str = "daily",
+    daily_hours: float = 4.0,
+    weak_topics: list = [],
+    study_intervals: list = [],
+    syllabus_topics: list = [],
+    past_completed_topics: list = []
+):
     """
     Generates a structured study schedule based on timeframes.
     Timeframe: daily | weekly | monthly
@@ -107,56 +119,66 @@ async def generate_schedule(exam_date: str, timeframe: str = "daily", daily_hour
     intervals_context = ""
     if timeframe == "daily" and study_intervals:
         intervals_str = "\n".join([f"- {i['start']} to {i['end']}" for i in study_intervals])
-        intervals_context = f"\nUser Preferences (Study only during these blocks):\n{intervals_str}"
-    
-    syllabus_context = ""
-    if syllabus_topics:
-        syllabus_context = f"\nFULL SYLLABUS CONTEXT ({len(syllabus_topics)} topics):\n- " + "\n- ".join(syllabus_topics[:50]) # Increased limit
+        intervals_context = f"\nSTUDY TIME BLOCKS (schedule tasks only within these windows):\n{intervals_str}"
+
+    # Hard guard — do NOT hallucinate topics when no syllabus is available
+    if not syllabus_topics:
+        print("WARNING: generate_schedule called with 0 syllabus topics — returning empty (no hallucination)")
+        return []
+
+    syllabus_str = "\n- ".join(syllabus_topics[:60])
+    syllabus_context = f"\nFULL SYLLABUS TOPICS ({len(syllabus_topics)} topics — YOU MUST ONLY USE THESE):\n- {syllabus_str}"
 
     pacing_context = ""
     if days_left is not None:
-        pacing_context = f"\nPACING CALCULATION:\n- Days remaining until exam: {days_left}\n- Total topics to cover: {len(syllabus_topics)}\n- Required topics per day: {round(len(syllabus_topics)/max(1, days_left), 1)}"
+        topics_per_day = round(len(syllabus_topics) / max(1, days_left), 1)
+        pacing_context = f"\nPACING:\n- Days until exam: {days_left}\n- Topics total: {len(syllabus_topics)}\n- Target topics/day: {topics_per_day}"
 
     past_context = ""
     if past_completed_topics:
-        past_context = f"\nALREADY COMPLETED (DO NOT INCLUDE THESE):\n- " + "\n- ".join(past_completed_topics)
+        past_context = f"\nALREADY COMPLETED — EXCLUDE THESE:\n- " + "\n- ".join(past_completed_topics)
+
+    weak_context = ""
+    if weak_topics:
+        weak_context = f"\nWEAK AREAS (prioritize these over others):\n- " + "\n- ".join(weak_topics)
 
     prompt = f"""
-    You are a 'Neural Pace-Aware Roadmap Architect'. Your goal is to map a student's ENTIRE syllabus to their remaining time.
-    
-    Context:
-    - Timeframe Focus: {timeframe}
-    - Target Exam Date: {exam_date}
-    - Daily Study Capacity: {daily_hours} hours
-    - Focus Areas (Weak Points): {", ".join(weak_topics) if weak_topics else "Review all core modules"}{intervals_context}{syllabus_context}{pacing_context}{past_context}
-    
-    Instructions for 'Full Syllabus Coverage':
-    1. Look at the 'FULL SYLLABUS CONTEXT'. Do NOT ignore topics.
-    2. Look at 'PACING CALCULATION'. If there are many topics and few days, increase the density of the roadmap.
-    3. Look at 'ALREADY COMPLETED'. The user finished these previously. You MUST NOT include them in this new roadmap. Focus on what's left.
-    4. You MUST use the specific names from the syllabus. No generic 'Review' or 'Study' titles. Use topic names like 'Gauss's Law' or 'Vector Calculus'.
-    5. Each task title MUST include the suggested time slot (e.g., "[09:00 - 10:30] Quantum Mechanics: Schrodinger Equation").
-    6. Provide 3-5 granular 'subtopics' for each task that exist within that master topic.
-    7. For 'daily' timeframe: Give 4-6 specific tasks for TODAY that help the user stay on track with the pacing.
-    
-    Return ONLY a JSON object with this exact schema:
+    You are a personalized study architect. Build a focused study plan using ONLY the provided syllabus topics.
+
+    CONFIGURATION:
+    - Timeframe: {timeframe}
+    - Exam Date: {exam_date}
+    - Daily Study Hours: {daily_hours}
+    {syllabus_context}{pacing_context}{past_context}{weak_context}{intervals_context}
+
+    STRICT RULES:
+    1. ONLY use topic names from the "FULL SYLLABUS TOPICS" list above. Do NOT invent new topics or subjects that are not in that list.
+    2. Do NOT add generic filler like "General Review", "Overview", or any subject not from the list.
+    3. Each task title MUST be one of the exact topic names from the syllabus (formatted as "[HH:MM-HH:MM] <Exact Topic Name>").
+    4. Provide 2-4 granular subtopics per task that are specific to that topic's content.
+    5. For 'daily': give 4-6 tasks covering the required topics/day from PACING.
+    6. For 'weekly': distribute syllabus topics across 7 day-groups.
+    7. For 'monthly': distribute across 4 week-groups.
+
+    Return ONLY this exact JSON schema — no extra text:
     {{
       "timeframe": "{timeframe}",
       "tasks": [
         {{
-          "id": "uuid-v4-string",
-          "title": "Specific Topic Title",
-          "description": "Specific instructional step for this topic",
-          "duration": "Duration in mins",
+          "id": "unique-id-string",
+          "title": "Exact topic name from syllabus",
+          "description": "What the student should focus on for this topic",
+          "duration": "duration in minutes",
           "category": "Theory|Practice|Revision|Mock",
           "priority": "high|medium|low",
-          "subtopics": ["Sub-detail 1", "Sub-detail 2", "Sub-detail 3"]
+          "subtopics": ["Subtopic 1", "Subtopic 2", "Subtopic 3"]
         }}
       ]
     }}
     """
     data = await call_groq_json(prompt)
     return data.get("tasks", [])
+
 
 async def grade_handwritten(image_base64: str, question_context: str = "", topic: str = "General"):
     """

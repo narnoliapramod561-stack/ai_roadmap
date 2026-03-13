@@ -64,15 +64,31 @@ async def generate_planner(
                 if material_ids:
                     m_ids = material_ids
                 else:
-                    # Fetch recent materials for this user (up to 10 to cover full syllabus)
-                    m_res = db.table("study_materials").select("id").eq("user_id", norm_user_id).order("created_at", descending=True).limit(10).execute()
+                    # Fetch recent materials for this user
+                    # FIX: use created_at (not uploaded_at) and desc=True (not descending=True)
+                    m_res = db.table("study_materials").select("id, ai_roadmap").eq("user_id", norm_user_id).order("created_at", desc=True).limit(10).execute()
                     if m_res.data:
                         m_ids = [m["id"] for m in m_res.data]
-                
-                if m_ids:
+                        # Primary: read labels from ai_roadmap JSONB stored at upload time
+                        for mat in m_res.data:
+                            ai_roadmap = mat.get("ai_roadmap") or {}
+                            # Handle both top-level topics list and nested structure
+                            topics_list = ai_roadmap.get("topics", [])
+                            kg_nodes = ai_roadmap.get("knowledge_graph", {}).get("nodes", [])
+                            for t in topics_list:
+                                if isinstance(t, dict) and t.get("name"):
+                                    syllabus_topics.append(t["name"])
+                            for n in kg_nodes:
+                                if isinstance(n, dict) and n.get("label") and n["label"] not in syllabus_topics:
+                                    syllabus_topics.append(n["label"])
+
+                # Secondary fallback: topics table (populated post-upload)
+                if not syllabus_topics and m_ids:
                     t_res = db.table("topics").select("label").in_("material_id", m_ids).execute()
                     if t_res.data:
                         syllabus_topics = [topic["label"] for topic in t_res.data]
+
+                print(f"Syllabus context: {len(syllabus_topics)} topics found for user {norm_user_id}")
             except Exception as e:
                 print(f"Warning: Syllabus context fetch failed: {e}")
 
