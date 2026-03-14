@@ -55,6 +55,7 @@ const GridMesh = ({ opacity = 0.3 }: KineticGridProps) => {
   return (
     <points ref={meshRef}>
       <bufferGeometry>
+        {/* @ts-ignore - fiber types complaining about missing args which we don't need here when using attach */}
         <bufferAttribute
           attach="attributes-position"
           count={positions.length / 3}

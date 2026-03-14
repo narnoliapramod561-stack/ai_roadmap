@@ -1,33 +1,47 @@
-import { useState } from 'react'
-import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Send, Bot, User, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useStudyStore } from '@/stores/useStudyStore'
 
 export const TutorPage = () => {
-  const { topicId } = useParams()
+  const { topicId: routeTopicId } = useParams()
+  const [searchParams] = useSearchParams()
+  const queryTopicId = searchParams.get('topicId')
+  const explainTopicName = searchParams.get('explain')
+  const topicId = routeTopicId || queryTopicId
+
   const roadmap = useStudyStore(state => state.roadmap)
   const topic = topicId ? roadmap.find(t => t.id === topicId) : null
 
-  const [messages, setMessages] = useState([
-    { 
-      role: 'assistant', 
-      content: topic 
-        ? `Hi! I'm your AI tutor. Let's study **${topic.label}** together. What questions do you have about this topic?`
-        : "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about your topics!" 
-    }
-  ])
+  const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [isTyping, setIsTyping] = useState(false)
+  const hasAutoExplained = useRef(false)
 
-  const handleSend = async () => {
-    if (!input.trim() || isTyping) return
+  // Initialize welcome message
+  useEffect(() => {
+    if (messages.length === 0) {
+      setMessages([
+        { 
+          role: 'assistant', 
+          content: topic 
+            ? `Hi! I'm your AI tutor. Let's study **${topic.label}** together. What questions do you have about this topic?`
+            : "Hi! I'm your AI tutor. I have access to your uploaded materials. Ask me anything about your topics!" 
+        }
+      ])
+    }
+  }, [topic, messages.length])
+
+  const handleSend = async (customMessage?: string) => {
+    const rawMessage = customMessage || input
+    if (!rawMessage.trim() || isTyping) return
     
-    const userMessage = input.trim()
+    const userMessage = rawMessage.trim()
     const context = topic ? `Currently studying: ${topic.label}. ${topic.difficulty} difficulty.` : ""
     const newMessages = [...messages, { role: 'user', content: userMessage }]
     setMessages(newMessages)
@@ -56,6 +70,14 @@ export const TutorPage = () => {
       setIsTyping(false)
     }
   }
+
+  // Auto-explain logic
+  useEffect(() => {
+    if (explainTopicName && !hasAutoExplained.current && !isTyping) {
+      hasAutoExplained.current = true
+      handleSend(`Can you explain the topic "${explainTopicName}" to me in detail?`)
+    }
+  }, [explainTopicName, isTyping])
 
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-120px)] flex flex-col space-y-4">
@@ -114,7 +136,7 @@ export const TutorPage = () => {
               className="h-12 border-primary/20 focus-visible:ring-primary/30 bg-background/80"
               disabled={isTyping}
             />
-            <Button size="icon" className="h-12 w-12 rounded-xl shadow-lg shadow-primary/20" onClick={handleSend} disabled={isTyping}>
+            <Button size="icon" className="h-12 w-12 rounded-xl shadow-lg shadow-primary/20" onClick={() => handleSend()} disabled={isTyping}>
               <Send className="w-5 h-5" />
             </Button>
           </div>

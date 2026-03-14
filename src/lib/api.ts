@@ -184,11 +184,19 @@ export const api = {
     });
   },
 
-  async generatePlanner(userId: string, timeframe: string = 'daily', examDate?: string, studyIntervals?: any[], materialIds?: string[]) {
+  async generatePlanner(userId: string, timeframe: string = 'daily', examDate?: string, studyIntervals?: any[], materialIds?: string[], syllabusTopicsOverride?: string[], subjectNamesOverride?: string[]) {
     const response = await fetchWithRetry(`${API_BASE_URL}/study/generate-planner`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_id: userId, timeframe, exam_date: examDate, study_intervals: studyIntervals, material_ids: materialIds }),
+      body: JSON.stringify({
+        user_id: userId,
+        timeframe,
+        exam_date: examDate,
+        study_intervals: studyIntervals,
+        material_ids: materialIds,
+        syllabus_topics_override: syllabusTopicsOverride && syllabusTopicsOverride.length > 0 ? syllabusTopicsOverride : undefined,
+        subject_names_override: subjectNamesOverride && subjectNamesOverride.length > 0 ? subjectNamesOverride : undefined
+      }),
     });
 
     if (!response.ok) handleApiError(response);
@@ -256,6 +264,20 @@ export const api = {
   },
 
   // ── Spaced Repetition ─────────────────────────────────
+  async updateMastery(topicId: string, quality: number, userId?: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/spaced-repetition/update-mastery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        topic_id: topicId,
+        quality: quality,
+        user_id: userId
+      })
+    })
+    if (!response.ok) handleApiError(response)
+    return response.json()
+  },
+
   async getSpacedRepetitionQueue(userId: string) {
     const response = await fetchWithRetry(`${API_BASE_URL}/spaced-repetition/queue?user_id=${userId}`);
     if (!response.ok) return { queue: [] };
@@ -276,6 +298,32 @@ export const api = {
       body: JSON.stringify({ topic, question, material_id: materialId, user_id: userId }),
     });
     if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  // ── Learned Topics (Persistent Progress) ─────────────
+  async markTopicLearned(userId: string, topicLabel: string, materialId?: string) {
+    const response = await fetchWithRetry(`${API_BASE_URL}/study/mark-learned`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId, topic_label: topicLabel, material_id: materialId ?? null }),
+    });
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  async unlearnTopic(userId: string, topicLabel: string) {
+    const response = await fetchWithRetry(
+      `${API_BASE_URL}/study/unlearn-topic?user_id=${encodeURIComponent(userId)}&topic_label=${encodeURIComponent(topicLabel)}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) handleApiError(response);
+    return response.json();
+  },
+
+  async getLearnedTopics(userId: string): Promise<{ topic_label: string; material_id?: string; learned_at: string }[]> {
+    const response = await fetchWithRetry(`${API_BASE_URL}/study/learned-topics?user_id=${encodeURIComponent(userId)}`);
+    if (!response.ok) return [];
     return response.json();
   },
 };

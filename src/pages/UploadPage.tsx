@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UploadCloud, AlertCircle, Trash2, Calendar, BookOpen, Loader2, Sparkles, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress'
 import { api } from '@/lib/api'
 import { useStudyStore } from '@/stores/useStudyStore'
 import { useUserStore } from '@/stores/useUserStore'
+import { useAppSync } from '@/stores/useAppSync'
 
 export const UploadPage = () => {
   const [materials, setMaterials] = useState<any[]>([])
@@ -27,6 +28,29 @@ export const UploadPage = () => {
   const localMaterials = useStudyStore(state => state.materials)
   const addMaterial = useStudyStore(state => state.addMaterial)
   const user = useUserStore(state => state.user)
+  const { notifyMaterialChange } = useAppSync()
+  const navigate = useNavigate()
+
+  const handleOpenMap = async (m: any) => {
+    try {
+      // Standardize the object (result.material_id vs material.id)
+      const matId = m.id || m.material_id
+      const roadmapData = m.ai_roadmap || m.analysis
+      
+      setMaterial(matId, m)
+      
+      if (!roadmapData) {
+        const data = await api.getRoadmap(matId, user?.id)
+        setRoadmap(data.nodes || [])
+      } else {
+        setRoadmap(roadmapData.knowledge_graph?.nodes || roadmapData.nodes || [])
+      }
+      navigate('/map')
+    } catch (err) {
+      console.error("Failed to sync roadmap for map navigation:", err)
+      navigate('/map') 
+    }
+  }
 
   // Fix: Refresh materials when user ID changes (hydration or login)
   useEffect(() => {
@@ -59,6 +83,7 @@ export const UploadPage = () => {
       await api.deleteMaterial(id)
       setMaterials(prev => prev.filter(m => m.id !== id))
       useStudyStore.getState().removeMaterial(id)
+      notifyMaterialChange() // Sync dashboard material count
     } catch (err) {
       console.error("Delete failed:", err)
       setError("Failed to delete material")
@@ -104,17 +129,20 @@ export const UploadPage = () => {
       setRoadmap(result.analysis.knowledge_graph.nodes)
       setUploadResult(result)
 
-      // Add to local cache for persistence resilience
+      // Add to local cache for persistence resilience — include ai_roadmap for planner topic extraction
       addMaterial({
         id: result.material_id,
         filename: selectedFile.name,
         subject_name: subjectName,
+        subject: subjectName,
         exam_date: examDate,
+        ai_roadmap: result.analysis,
         created_at: new Date().toISOString()
       })
       
       setIsUploading(false)
       setIsComplete(true)
+      notifyMaterialChange() // Sync dashboard material count
       
       // Clear inputs for next time
       setSubjectName('')
@@ -179,11 +207,14 @@ export const UploadPage = () => {
                     </div>
                   </div>
                   <div className="flex gap-2 pt-2">
-                    <Link to="/map" className="flex-1">
-                      <Button variant="ghost" size="sm" className="w-full glass border-white/5 text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all h-11 rounded-xl group/btn">
-                        Open Knowledge Map <Plus className="w-3 h-3 ml-2 group-hover:rotate-90 transition-transform" />
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="w-full glass border-white/5 text-[9px] font-black uppercase tracking-widest hover:bg-primary hover:text-black transition-all h-11 rounded-xl group/btn"
+                      onClick={() => handleOpenMap(m)}
+                    >
+                      Open Knowledge Map <Plus className="w-3 h-3 ml-2 group-hover:rotate-90 transition-transform" />
+                    </Button>
                   </div>
                 </div>
               </motion.div>
@@ -309,16 +340,18 @@ export const UploadPage = () => {
                     Successfully forged {uploadResult?.analysis?.total_topics} core entities into your Knowledge Map.
                   </p>
                </div>
-               <div className="flex flex-col sm:flex-row justify-center gap-6 pt-6 px-10">
-                  <Link to="/map" className="flex-1">
-                    <Button size="lg" className="w-full rounded-[24px] px-12 h-20 bg-primary text-black font-black uppercase tracking-[0.3em] hover:scale-[1.03] transition-all shadow-xl shadow-primary/20">
+                <div className="flex flex-col sm:flex-row justify-center gap-6 pt-6 px-10">
+                    <Button 
+                      size="lg" 
+                      className="flex-1 rounded-[24px] px-12 h-20 bg-primary text-black font-black uppercase tracking-[0.3em] hover:scale-[1.03] transition-all shadow-xl shadow-primary/20"
+                      onClick={() => handleOpenMap(uploadResult)}
+                    >
                       View Results
                     </Button>
-                  </Link>
                   <Button size="lg" variant="ghost" className="flex-1 rounded-[24px] px-12 h-20 glass border-white/10 text-white font-black uppercase tracking-[0.3em] hover:bg-white/5 transition-all" onClick={() => setIsComplete(false)}>
                     New Entry
                   </Button>
-               </div>
+                </div>
             </div>
           </motion.div>
         )}

@@ -101,20 +101,41 @@ async def generate_schedule(
     weak_topics: list = [],
     study_intervals: list = [],
     syllabus_topics: list = [],
-    past_completed_topics: list = []
+    past_completed_topics: list = [],
+    learned_topics: list = [],         # Persistently marked as learned
+    material_exam_dates: dict = {},     # { "Subject Name": "YYYY-MM-DD" }
+    subject_names: list = []            # Fallback when no detailed topics are available
 ):
     """
     Generates a structured study schedule based on timeframes.
     Timeframe: daily | weekly | monthly
+
+    learned_topics: topics the user permanently marked as done (persist across plan regens)
+    material_exam_dates: per-subject exam dates for urgency/pacing context
     """
+    today = datetime.now()
+
+    # Compute primary exam days_left
     days_left = None
     if exam_date:
         try:
             target = datetime.strptime(exam_date, "%Y-%m-%d")
-            today = datetime.now()
-            days_left = (target - today).days
+            days_left = max(0, (target - today).days)
         except:
             pass
+
+    # Per-material urgency context
+    material_dates_context = ""
+    if material_exam_dates:
+        lines = []
+        for subj, edate in material_exam_dates.items():
+            try:
+                d = datetime.strptime(edate, "%Y-%m-%d")
+                dl = max(0, (d - today).days)
+                lines.append(f"  - {subj}: exam in {dl} days ({edate})")
+            except:
+                lines.append(f"  - {subj}: exam on {edate}")
+        material_dates_context = "\nPER-SUBJECT EXAM DEADLINES (order by urgency — closest exam = highest priority):\n" + "\n".join(lines)
 
     intervals_context = ""
     if timeframe == "daily" and study_intervals:
@@ -122,43 +143,76 @@ async def generate_schedule(
         intervals_context = f"\nSTUDY TIME BLOCKS (schedule tasks only within these windows):\n{intervals_str}"
 
     # Hard guard — do NOT hallucinate topics when no syllabus is available
-    if not syllabus_topics:
-        print("WARNING: generate_schedule called with 0 syllabus topics — returning empty (no hallucination)")
+    if not syllabus_topics and not subject_names:
+        print("WARNING: generate_schedule called with 0 syllabus topics and no subject names — returning empty")
         return []
 
-    syllabus_str = "\n- ".join(syllabus_topics[:60])
-    syllabus_context = f"\nFULL SYLLABUS TOPICS ({len(syllabus_topics)} topics — YOU MUST ONLY USE THESE):\n- {syllabus_str}"
+    # If we have subject names but no topics, synthesize topic list from subjects
+    if not syllabus_topics and subject_names:
+        # Build a synthetic syllabus from subject names so the AI has something to work with
+        # The AI prompt will instruct it to generate appropriate topics for these subjects
+        syllabus_topics = subject_names
+        print(f"No syllabus topics found — using {len(subject_names)} subject name(s) as syllabus context")
+
+    using_subject_mode = (not syllabus_topics or syllabus_topics == subject_names) and len(subject_names) > 0
+    syllabus_str = "\n- ".join(syllabus_topics[:80])
+    if using_subject_mode:
+        syllabus_context = f"\nSUBJECTS TO COVER (generate appropriate topics FOR each subject — do not add unrelated subjects):\n- {syllabus_str}"
+    else:
+        syllabus_context = f"\nFULL SYLLABUS TOPICS ({len(syllabus_topics)} topics — YOU MUST ONLY USE THESE):\n- {syllabus_str}"
 
     pacing_context = ""
     if days_left is not None:
-        topics_per_day = round(len(syllabus_topics) / max(1, days_left), 1)
-        pacing_context = f"\nPACING:\n- Days until exam: {days_left}\n- Topics total: {len(syllabus_topics)}\n- Target topics/day: {topics_per_day}"
+        all_skipped = set(past_completed_topics) | set(learned_topics)
+        remaining_count = len([t for t in syllabus_topics if t not in all_skipped]) if not using_subject_mode else "varies"
+        topics_per_day = round(len(syllabus_topics) / max(1, days_left), 1) if not using_subject_mode else "varies"
+        pacing_context = (
+            f"\nPACING:"
+            f"\n- Days until exam: {days_left}"
+            f"\n- Target topics/day to finish on time: {topics_per_day}"
+        )
 
+    all_excluded = list(set(past_completed_topics) | set(learned_topics))
     past_context = ""
-    if past_completed_topics:
-        past_context = f"\nALREADY COMPLETED — EXCLUDE THESE:\n- " + "\n- ".join(past_completed_topics)
+    if all_excluded:
+        past_context = f"\nALREADY LEARNED — STRICTLY EXCLUDE THESE FROM THE PLAN:\n- " + "\n- ".join(all_excluded[:60])
 
     weak_context = ""
     if weak_topics:
-        weak_context = f"\nWEAK AREAS (prioritize these over others):\n- " + "\n- ".join(weak_topics)
+        weak_context = f"\nWEAK AREAS (prioritize these — student struggles here):\n- " + "\n- ".join(weak_topics)
 
-    prompt = f"""
-    You are a personalized study architect. Build a focused study plan using ONLY the provided syllabus topics.
-
-    CONFIGURATION:
-    - Timeframe: {timeframe}
-    - Exam Date: {exam_date}
-    - Daily Study Hours: {daily_hours}
-    {syllabus_context}{pacing_context}{past_context}{weak_context}{intervals_context}
-
+    if using_subject_mode:
+        rules = """
+    RULES (subject-name mode — no detailed syllabus provided):
+    1. For each subject in the list, generate 4-8 realistic university-level topic names for that subject.
+    2. Create study tasks covering those generated topics. Prioritize subjects with nearest exam dates.
+    3. Each task title = a specific topic from that subject (e.g. "Arrays and Linked Lists" not just "Computer Science").
+    4. Provide 2-3 granular subtopics per task.
+    5. For 'daily': give 4-6 tasks. For 'weekly': 7 day-groups. For 'monthly': 4 week-groups.
+    6. NEVER include any topic listed under ALREADY LEARNED."""
+    else:
+        rules = """
     STRICT RULES:
-    1. ONLY use topic names from the "FULL SYLLABUS TOPICS" list above. Do NOT invent new topics or subjects that are not in that list.
-    2. Do NOT add generic filler like "General Review", "Overview", or any subject not from the list.
-    3. Each task title MUST be one of the exact topic names from the syllabus (formatted as "[HH:MM-HH:MM] <Exact Topic Name>").
-    4. Provide 2-4 granular subtopics per task that are specific to that topic's content.
+    1. ONLY use topic names from the "FULL SYLLABUS TOPICS" list above. Do NOT invent new topics.
+    2. Do NOT add generic filler like "General Review", "Overview", or invented subjects.
+    3. Each task title MUST be one of the exact topic names from the syllabus.
+    4. Provide 2-4 granular subtopics per task specific to that topic's content.
     5. For 'daily': give 4-6 tasks covering the required topics/day from PACING.
     6. For 'weekly': distribute syllabus topics across 7 day-groups.
     7. For 'monthly': distribute across 4 week-groups.
+    8. NEVER include any topic from the "ALREADY LEARNED" list — start from the NEXT unlearned topic.
+    9. If per-subject exam dates are given, give higher priority (high priority field) to the subject with the nearest exam."""
+
+    prompt = f"""
+    You are a personalized study architect. Build a focused study plan.
+
+    CONFIGURATION:
+    - Timeframe: {timeframe}
+    - Primary Exam Date: {exam_date}
+    - Daily Study Hours: {daily_hours}
+    {syllabus_context}{pacing_context}{material_dates_context}{past_context}{weak_context}{intervals_context}
+
+    {rules}
 
     Return ONLY this exact JSON schema — no extra text:
     {{

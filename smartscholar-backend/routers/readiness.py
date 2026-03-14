@@ -57,15 +57,31 @@ async def get_readiness_score(
             ai_roadmap = mat.get("ai_roadmap") or {}
             total_topics += ai_roadmap.get("total_topics", 0) or len(ai_roadmap.get("topics", []))
 
-        # 4. Calculate topic scores from quiz history
+        # 4. Fetch persistently learned topics
+        learned_res = db.table("learned_topics").select("topic_label").eq("user_id", norm_uid).execute()
+        learned_topics = [t["topic_label"] for t in (learned_res.data or [])]
+
+        # 5. Fetch planner tasks for schedule completion
+        planner_res = db.table("planner_tasks").select("is_completed").eq("user_id", norm_uid).execute()
+        planner_tasks = planner_res.data or []
+        
+        # 6. Calculate topic scores from quiz history + learned topics
         topic_scores: dict = {}
         difficulty_weights = {"easy": 0.5, "medium": 1.0, "hard": 1.5}
+
+        # Any topic marked as "Learned" is 100% mastered
+        for topic in learned_topics:
+            topic_scores[topic] = {"weighted_sum": 1.0, "weight_total": 1.0}
 
         for quiz in quizzes:
             result = quiz.get("attempt_result") or {}
             if not result:
                 continue
             topic = quiz.get("topic_name", "Unknown")
+            # If already marked learned, quiz score just reinforces it
+            if topic in learned_topics:
+                continue
+            
             raw_score = result.get("score", 0)
             total_q = result.get("total", 1)
             score_pct = raw_score / max(total_q, 1)
@@ -93,20 +109,27 @@ async def get_readiness_score(
         )
         coverage = min(coverage, 1.0)
 
-        # 6. Schedule completion
-        sched_res = db.table("study_schedules").select("schedule").eq("user_id", norm_uid).eq("active", True).limit(1).execute()
+        # 8. Schedule completion (Merge legacy study_schedules with modern planner_tasks)
         schedule_completion = 0.0
-        if sched_res.data:
-            sched = sched_res.data[0].get("schedule") or {}
-            days = sched.get("days", [])
-            if days:
-                completed_sessions = sum(
-                    1 for day in days
-                    for sess in day.get("sessions", [])
-                    if sess.get("completed", False)
-                )
-                total_sessions = sum(len(day.get("sessions", [])) for day in days)
-                schedule_completion = completed_sessions / max(total_sessions, 1)
+        
+        # Primary: Modern planner tasks completion ratio
+        if planner_tasks:
+            completed_p = sum(1 for t in planner_tasks if t.get("is_completed"))
+            schedule_completion = completed_p / len(planner_tasks)
+        # Fallback: Legacy study_schedules
+        else:
+            sched_res = db.table("study_schedules").select("schedule").eq("user_id", norm_uid).eq("active", True).limit(1).execute()
+            if sched_res.data:
+                sched = sched_res.data[0].get("schedule") or {}
+                days = sched.get("days", [])
+                if days:
+                    completed_sessions = sum(
+                        1 for day in days
+                        for sess in day.get("sessions", [])
+                        if sess.get("completed", False)
+                    )
+                    total_sessions = sum(len(day.get("sessions", [])) for day in days)
+                    schedule_completion = completed_sessions / max(total_sessions, 1)
 
         # 7. Overdue SR penalty
         today = date.today()

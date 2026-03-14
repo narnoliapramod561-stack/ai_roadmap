@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  CheckCircle2, XCircle, Timer, ChevronRight, Loader2,
-  Zap, Trophy, RotateCcw, Brain, Target, Clock, TrendingUp
+  CheckCircle2, XCircle, Timer, ChevronRight,
+  Zap, RotateCcw, Brain, TrendingUp
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { useStudyStore } from '@/stores/useStudyStore'
 import { useUserStore } from '@/stores/useUserStore'
+import { useAppSync } from '@/stores/useAppSync'
 
 // ── State Machine ─────────────────────────────────────
 type QuizState = 'idle' | 'loading' | 'answering' | 'submitted' | 'results'
@@ -18,6 +19,7 @@ export const QuizPage = () => {
   const user = useUserStore(s => s.user)
 
   const currentTopic = topicId ? roadmap.find(t => t.id === topicId) : roadmap[0]
+  const { notifyQuizComplete, overdueTopics } = useAppSync()
 
   // State Machine
   const [phase, setPhase] = useState<QuizState>('idle')
@@ -25,6 +27,10 @@ export const QuizPage = () => {
   const [quizId, setQuizId] = useState<string | null>(null)
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium')
   const [questionCount, setQuestionCount] = useState(5)
+  const [quizSource, setQuizSource] = useState<'subject' | 'queue'>('queue')
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null)
+  
+  const subjects = useStudyStore(s => s.materials)
 
   // Answering state
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -52,10 +58,23 @@ export const QuizPage = () => {
     setPhase('loading')
     setError(null)
     try {
-      const topicLabel = currentTopic?.label || topicId || 'General Knowledge'
+      let targetTopicLabel = currentTopic?.label || topicId || 'General Knowledge'
+      let targetTopicId = topicId || 'general'
+
+      // If source is Queue, we pick the most overdue topic if no topicId is explicitly provided in URL
+      if (quizSource === 'queue' && !topicId && overdueTopics.length > 0) {
+        targetTopicId = overdueTopics[0].topic_id
+        targetTopicLabel = overdueTopics[0].topic_name
+      } else if (quizSource === 'subject' && selectedSubjectId) {
+        // Find subject name to use as context
+        const subject = subjects.find(s => s.id === selectedSubjectId)
+        targetTopicId = selectedSubjectId
+        targetTopicLabel = subject?.subject_name || subject?.file_name || 'Subject Review'
+      }
+
       const result = await api.generateQuizFull(
-        topicId || 'general',
-        topicLabel,
+        targetTopicId,
+        targetTopicLabel,
         undefined,
         user?.id,
         questionCount,
@@ -110,6 +129,8 @@ export const QuizPage = () => {
       )
       setResults(result)
       setPhase('results')
+      // Notify sync — triggers readiness and quiz history refresh on dashboard
+      if (user?.id) notifyQuizComplete(user.id)
     } catch (err: any) {
       // If submit fails, show local results
       const correct = answers.filter((a, i) => a === questions[i]?.correct).length
@@ -160,7 +181,54 @@ export const QuizPage = () => {
             )}
 
             <div className="bg-white/5 border border-white/10 rounded-[30px] p-8 space-y-8">
+              
               <div className="space-y-4">
+                <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Quiz Source</label>
+                <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+                  <button 
+                    onClick={() => setQuizSource('queue')}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all ${quizSource === 'queue' ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
+                  >
+                    Revision Queue
+                  </button>
+                  <button 
+                    onClick={() => setQuizSource('subject')}
+                    className={`flex-1 py-3 rounded-xl font-black uppercase tracking-widest text-xs transition-all ${quizSource === 'subject' ? 'bg-primary text-black' : 'text-white/40 hover:text-white'}`}
+                  >
+                    By Subject
+                  </button>
+                </div>
+              </div>
+
+              {quizSource === 'queue' && (
+                <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center gap-3">
+                  <RotateCcw className="w-5 h-5 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-white">SM-2 Revision Queue</p>
+                    <p className="text-[10px] uppercase font-black tracking-widest text-white/40 mt-1">{overdueTopics.length} topics due for review</p>
+                  </div>
+                </div>
+              )}
+
+              {quizSource === 'subject' && (
+                 <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Select Subject</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-48 overflow-y-auto">
+                    {subjects.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSubjectId(s.id)}
+                        className={`p-3 rounded-xl border text-left truncate transition-all ${selectedSubjectId === s.id ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-white/5 border-white/10 text-white/60 hover:border-white/20'}`}
+                      >
+                         <span className="text-xs font-bold uppercase tracking-wider">{s.subject_name || s.file_name || 'Untitled Subject'}</span>
+                      </button>
+                    ))}
+                    {subjects.length === 0 && <p className="text-xs text-white/40 p-4">No subjects found. Upload a syllabus first.</p>}
+                  </div>
+                 </div>
+              )}
+
+              <div className="space-y-4 pt-4 border-t border-white/5">
                 <label className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Difficulty Level</label>
                 <div className="flex gap-3">
                   {(['easy', 'medium', 'hard'] as const).map(d => (
@@ -191,8 +259,10 @@ export const QuizPage = () => {
               </div>
             </div>
 
-            <button onClick={startQuiz}
-              className="w-full py-6 bg-primary text-black font-black uppercase tracking-[0.3em] text-lg rounded-[24px] hover:scale-[1.02] active:scale-95 transition-all shadow-[0_0_40px_rgba(0,245,212,0.3)] flex items-center justify-center gap-3"
+            <button 
+              onClick={startQuiz}
+              disabled={quizSource === 'subject' && !selectedSubjectId}
+              className={`w-full py-6 font-black uppercase tracking-[0.3em] text-lg rounded-[24px] transition-all flex items-center justify-center gap-3 ${quizSource === 'subject' && !selectedSubjectId ? 'bg-white/5 text-white/20 cursor-not-allowed' : 'bg-primary text-black hover:scale-[1.02] active:scale-95 shadow-[0_0_40px_rgba(0,245,212,0.3)]'}`}
             >
               <Zap className="w-6 h-6" /> Initialize Assessment
             </button>

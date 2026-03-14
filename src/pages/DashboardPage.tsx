@@ -1,51 +1,40 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  Zap, Target, TrendingUp, Activity, Clock, Medal,
+  Target, TrendingUp, Activity, Clock,
   Brain, Sparkles, AlertTriangle, BookOpen, ChevronRight as ChevronRightIcon,
-  Trophy, BarChart2
+  CheckCircle
 } from 'lucide-react'
-import { api } from '@/lib/api'
 import { useUserStore } from '@/stores/useUserStore'
-import { useStudyStore } from '@/stores/useStudyStore'
+import { useAppSync } from '@/stores/useAppSync'
+import { usePlannerStore } from '@/stores/usePlannerStore'
 
 export const DashboardPage = () => {
   const user = useUserStore(state => state.user)
-  const { materials } = useStudyStore()
+  const tasks = usePlannerStore(state => state.tasks)
+  const completedTasks = tasks.filter(t => t.is_completed).length
 
-  const [readiness, setReadiness] = useState<any>(null)
-  const [overdueTopics, setOverdueTopics] = useState<any[]>([])
-  const [quizHistory, setQuizHistory] = useState<any[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const {
+    readinessPct, topicsAttempted, totalTopics,
+    weakAreas, strongAreas,
+    overdueTopics,
+    isSyncing, lastPlannerSyncAt, lastQuizSyncAt, lastMaterialSyncAt,
+    fetchAll
+  } = useAppSync()
 
-  // Live fetch on mount
+  // Initial load
   useEffect(() => {
-    if (!user?.id) return
-    const load = async () => {
-      setIsLoading(true)
-      try {
-        const [readinessData, overdueData, historyData] = await Promise.all([
-          api.getReadinessScore(user.id!).catch(() => null),
-          api.getOverdueTopics(user.id!).catch(() => ({ overdue: [] })),
-          api.getQuizHistory(user.id!).catch(() => []),
-        ])
-        setReadiness(readinessData)
-        setOverdueTopics(overdueData?.overdue || [])
-        setQuizHistory(historyData || [])
-      } catch (e) {
-        console.error('Dashboard load error:', e)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    load()
+    if (user?.id) fetchAll(user.id)
   }, [user?.id])
 
-  const readinessPct = readiness?.readiness_pct ?? 0
-  const weakAreas = readiness?.weak_areas ?? []
-  const strongAreas = readiness?.strong_areas ?? []
-  const recentQuizzes = quizHistory.slice(0, 5)
+  // Re-fetch whenever any feature changes (planner task, quiz, material)
+  useEffect(() => {
+    if (user?.id && (lastPlannerSyncAt || lastQuizSyncAt || lastMaterialSyncAt)) {
+      fetchAll(user.id)
+    }
+  }, [lastPlannerSyncAt, lastQuizSyncAt, lastMaterialSyncAt])
+
 
   return (
     <div className="max-w-7xl mx-auto space-y-12">
@@ -77,13 +66,13 @@ export const DashboardPage = () => {
           color={readinessPct >= 80 ? 'text-primary' : readinessPct >= 50 ? 'text-yellow-400' : 'text-red-400'} delay={0.1}
         />
         <StatCard icon={Target} title="Topics Mastered" value={String(strongAreas.length)}
-          trend={`${readiness?.topics_attempted ?? 0} attempted`} color="text-[#B9A7FF]" delay={0.2}
+          trend={`${topicsAttempted} of ${totalTopics} attempted`} color="text-[#B9A7FF]" delay={0.2}
         />
         <StatCard icon={Clock} title="Overdue Reviews" value={String(overdueTopics.length)}
           trend={overdueTopics.length === 0 ? 'All up to date' : 'Need attention'} color={overdueTopics.length > 0 ? 'text-red-400' : 'text-primary'} delay={0.3}
         />
-        <StatCard icon={Trophy} title="Quizzes Taken" value={String(quizHistory.length)}
-          trend={`${recentQuizzes.filter(q => (q.attempt_result?.score_pct ?? 0) >= 80).length} high scores`} color="text-[#B9A7FF]" delay={0.4}
+        <StatCard icon={CheckCircle} title="Tasks Done Today" value={String(completedTasks)}
+          trend={`${tasks.length - completedTasks} remaining`} color="text-[#B9A7FF]" delay={0.4}
         />
       </div>
 
@@ -111,43 +100,47 @@ export const DashboardPage = () => {
             </div>
           )}
 
-          {/* Recent Quiz History */}
+          {/* Revision Queue */}
           <div className="refracted-glass border-highlight rounded-[30px] p-8">
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-black uppercase tracking-widest text-white italic">Quiz History</h2>
+              <h2 className="text-xl font-black uppercase tracking-widest text-white italic">Revision Queue</h2>
               <Link to="/quiz" className="text-xs font-black uppercase tracking-widest text-primary hover:text-white transition-colors flex items-center gap-2">
-                New Quiz <ChevronRightIcon className="w-4 h-4" />
+                Start Review <ChevronRightIcon className="w-4 h-4" />
               </Link>
             </div>
-            {isLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="w-8 h-8 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+            {isSyncing ? (
+              <div className="flex items-center justify-center py-12 gap-3">
+                <div className="w-6 h-6 border-2 border-primary/20 border-t-primary rounded-full animate-spin" />
+                <span className="text-xs font-black uppercase tracking-widest text-white/30">Syncing SM-2 Data...</span>
               </div>
-            ) : recentQuizzes.length === 0 ? (
+            ) : overdueTopics.length === 0 ? (
               <div className="py-10 text-center text-white/30 font-bold uppercase tracking-widest text-xs">
-                No quizzes yet — take your first quiz!
+                Queue is empty — great job staying on top of your studies!
               </div>
             ) : (
               <div className="space-y-4">
-                {recentQuizzes.map((q, idx) => {
-                  const pct = q.attempt_result?.score_pct ?? Math.round((q.attempt_result?.score / q.attempt_result?.total) * 100) ?? 0
-                  return (
-                    <div key={q.id || idx} className="flex items-center justify-between bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${pct >= 80 ? 'bg-primary/20 text-primary' : pct >= 50 ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
-                          <Brain className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-white text-sm">{q.topic_name || 'Quiz'}</h4>
-                          <p className="text-[10px] font-black uppercase tracking-wider text-white/30">{q.difficulty} · {q.attempt_result?.total ?? '?'} questions</p>
-                        </div>
+                {overdueTopics.slice(0, 5).map((t, idx) => (
+                  <div key={t.topic_id || idx} className="flex items-center justify-between bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-colors group">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400">
+                        <AlertTriangle className="w-5 h-5" />
                       </div>
-                      <div className={`font-black text-xl italic ${pct >= 80 ? 'text-primary' : pct >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {pct}%
+                      <div>
+                        <h4 className="font-bold text-white text-sm">{t.topic_name || 'Concept Review'}</h4>
+                        <p className="text-[10px] font-black uppercase tracking-wider text-white/30 truncate max-w-[200px]">
+                      Mastery: {Math.round(t.mastery_level || 0)}%
+                        </p>
                       </div>
                     </div>
-                  )
-                })}
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Link to={`/tutor?topicId=${t.topic_id}&explain=${encodeURIComponent(t.topic_name)}`}>
+                        <button className="px-4 py-2 bg-primary/20 hover:bg-primary text-primary hover:text-black rounded-lg text-[10px] font-black uppercase tracking-widest transition-all">
+                          Explain
+                        </button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -175,7 +168,6 @@ export const DashboardPage = () => {
         <motion.div
           initial={{ opacity: 0, x: 50, rotateY: -20 }}
           animate={{ opacity: 1, x: 0, rotateY: 0 }}
-          transition={{ duration: 0.8, delay: 0.6 }}
           className="space-y-8"
         >
           {/* Readiness Gauge */}
@@ -199,7 +191,7 @@ export const DashboardPage = () => {
             </div>
             <h3 className="text-sm font-black uppercase tracking-widest text-white mb-1">Exam Readiness Score</h3>
             <p className="text-[10px] text-white/40 font-bold uppercase tracking-widest">
-              {readiness?.topics_attempted ?? 0} of {readiness?.total_topics ?? '?'} topics attempted
+              {topicsAttempted} of {totalTopics} topics attempted
             </p>
 
             <div className="w-full h-px bg-white/10 my-6" />
@@ -234,16 +226,25 @@ export const DashboardPage = () => {
             </div>
           )}
 
-          {/* Materials count */}
+          {/* Planner progress */}
           <div className="bg-[#07070A]/80 border border-white/10 rounded-[30px] p-6">
             <h2 className="text-sm font-black uppercase tracking-widest text-white/60 mb-4 flex items-center gap-2">
-              <BookOpen className="w-4 h-4" /> Materials Loaded
+              <Target className="w-4 h-4" /> Today's Plan
             </h2>
-            <div className="text-4xl font-black italic text-white">{materials.length}</div>
-            <p className="text-[10px] text-white/30 uppercase tracking-widest font-bold mt-1">Syllabi in Knowledge Base</p>
-            <Link to="/upload" className="block mt-4 text-center text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors">
-              Add More →
-            </Link>
+            <div className="flex items-end gap-2 mb-2">
+              <div className="text-4xl font-black italic text-white">{completedTasks}</div>
+              <div className="text-white/40 font-bold text-sm mb-1">/ {tasks.length}</div>
+            </div>
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/10 mb-2">
+              <div
+                className="h-full bg-primary rounded-full transition-all duration-700"
+                style={{ width: tasks.length > 0 ? `${(completedTasks / tasks.length) * 100}%` : '0%' }}
+              />
+            </div>
+            <p className="text-[10px] text-white/30 uppercase tracking-widest font-bold mt-1">Tasks Completed</p>
+            <a href="/planner" className="block mt-4 text-center text-[10px] font-black uppercase tracking-widest text-primary hover:text-white transition-colors">
+              View Planner →
+            </a>
           </div>
         </motion.div>
       </div>

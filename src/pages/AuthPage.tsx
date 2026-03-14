@@ -1,17 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
-import { User, Lock, Mail, ChevronRight, ShieldCheck, BrainCircuit } from 'lucide-react';
+import { User, ChevronRight, ShieldCheck, BrainCircuit } from 'lucide-react';
 import { motion, useMotionValue, useSpring, useTransform, useMotionTemplate } from 'framer-motion';
+import { useUserStore } from '@/stores/useUserStore';
 
 export const AuthPage = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const setUser = useUserStore((state) => state.setUser);
 
   // 3D Tilt Effect
   const mouseX = useMotionValue(0)
@@ -35,48 +33,23 @@ export const AuthPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!fullName.trim()) {
+      setError('Please provide a valid agent name.');
+      return;
+    }
+
     setError('');
     setLoading(true);
 
-    try {
-      if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (error) throw error;
-        
-        // Ensure user metadata is set after login for the avatar
-        if (data.user && !data.user.user_metadata?.full_name && fullName) {
-           await supabase.auth.updateUser({
-              data: { full_name: fullName }
-           });
-        }
-        
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: fullName,
-            },
-          },
-        });
-
-        if (error) throw error;
-        alert('Registration successful! Please sign in.');
-        setIsLogin(true);
-      }
-      if (isLogin) {
-         navigate('/dashboard');
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    // Simulate uplink delay
+    setTimeout(() => {
+      setUser({
+        id: `agent-${Math.random().toString(36).substring(7)}`,
+        email: `${fullName.toLowerCase().replace(/\s/g, '')}@neural.net`,
+        firstName: fullName.trim()
+      });
+      navigate('/dashboard');
+    }, 800);
   };
 
   return (
@@ -131,66 +104,32 @@ export const AuthPage = () => {
 
           <div style={{ transform: "translateZ(40px)" }} className="text-center mb-10">
             <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-2">
-              {isLogin ? 'NEURAL' : 'INITIALIZE'} <span className="text-primary truncate block drop-shadow-[0_0_10px_#00F5D440]">PORTAL</span>
+              NEURAL <span className="text-primary truncate block drop-shadow-[0_0_10px_#00F5D440]">PORTAL</span>
             </h2>
             <p className="text-white/40 text-sm font-bold uppercase tracking-[0.2em]">
-              {isLogin ? 'Authenticate to interface' : 'Create an uplink'}
+              Identify to Interface
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6" style={{ transform: "translateZ(30px)" }}>
-            {!isLogin && (
-              <div className="space-y-2 relative">
-                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Agent Name</label>
-                <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-primary opacity-70" />
-                  </div>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold"
-                    placeholder="Enter full name"
-                    required={!isLogin}
-                  />
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2 relative">
-               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Uplink Frequency (Email)</label>
+              <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Agent Name</label>
               <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-primary opacity-70" />
+                  <User className="h-5 w-5 text-primary opacity-70" />
                 </div>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
                   className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold"
-                  placeholder="Enter email channel"
+                  placeholder="Enter full name"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2 relative">
-               <label className="text-[10px] font-black uppercase tracking-[0.2em] text-white/50 ml-4">Encryption Key (Password)</label>
-              <div className="relative input-glow transition-all rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-primary opacity-70" />
-                </div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-12 pr-4 py-4 bg-transparent text-white placeholder-white/20 focus:outline-none font-bold tracking-widest"
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-            </div>
+
 
             {error && (
               <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-bold flex items-center gap-2">
@@ -208,21 +147,12 @@ export const AuthPage = () => {
                  <BrainCircuit className="w-6 h-6 animate-pulse" />
               ) : (
                 <>
-                  {isLogin ? 'AUTHENTICATE' : 'INITIALIZE'}
+                  INITIALIZE UPLINK
                   <ChevronRight className="w-6 h-6 ml-2 opacity-50 group-hover:opacity-100 transition-opacity" />
                 </>
               )}
             </button>
           </form>
-
-          <div style={{ transform: "translateZ(20px)" }} className="mt-8 text-center">
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-xs font-black uppercase tracking-[0.2em] text-white/40 hover:text-primary transition-colors underline decoration-white/20 hover:decoration-primary/50 underline-offset-4"
-            >
-              {isLogin ? 'Request New Uplink (Sign Up)' : 'Existing Agent (Sign In)'}
-            </button>
-          </div>
         </motion.div>
       </motion.div>
     </div>
