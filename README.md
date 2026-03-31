@@ -182,29 +182,33 @@ See [SETUP_GUIDE.md](SETUP_GUIDE.md) for more troubleshooting steps.
 
 ---
 
-## 🌐 Deployment
+## 🌐 Deployment (Vercel Optimized)
 
-### Frontend
-```bash
-npm run build
-# Deploy dist/ folder to Vercel, Netlify, or your hosting
-```
+The project is now optimized for **Vercel** with a unified monorepo structure.
 
-### Backend
-```bash
-# Deploy to Railway, Heroku, AWS, Google Cloud, etc.
-# Update VITE_API_URL in frontend .env
-```
+### 1. Repository Setup
+Ensure your GitHub repository contains both the `src/` (frontend) and `smartscholar-backend/` (FastAPI) directories.
+
+### 2. Vercel Configuration
+The project includes a `vercel.json` and `api/index.py` that automatically configures Vercel to:
+- Serve the **Vite + React** frontend.
+- Serve the **FastAPI** backend as Serverless Functions under the `/api` prefix.
+
+### 3. Environment Variables
+Add the following to your Vercel Project Settings:
+- `GROQ_API_KEY`: Your AI provider key.
+- `SUPABASE_URL`: Your Supabase project URL.
+- `SUPABASE_ANON_KEY`: Your Supabase anonymous key.
+- `SUPABASE_SERVICE_ROLE_KEY`: Required for some backend operations.
 
 ---
 
 ## 📊 Project Statistics
 
 - **Frontend Files**: 11 pages + 20+ components
-- **Backend Routes**: 5 main routers with error handling
-- **Database Tables**: 6 tables for comprehensive data storage
-- **API Endpoints**: 10+ endpoints
-- **Error Handling**: Implemented across all layers
+- **Backend Routes**: 9 specific routers (Materials, Study, Quiz, Tutor, Grader, Auth, Readiness, Spaced Repetition, AI Explain)
+- **Database Tables**: Complete schema for materials, topics, user progress, and spaced repetition queue.
+- **AI Integration**: Deep analysis of syllabi, MCQ generation, and handwritten answer grading.
 
 ---
 
@@ -256,32 +260,8 @@ For issues and questions:
 
 ---
 
-**Last Updated**: March 13, 2026  
-**Status**: ✅ Fully Functional  
-**Version**: 1.1 (with error handling improvements)
+**Last Updated**: March 31, 2026  
+**Status**: 🚀 Fully Deployed on Vercel  
+**Version**: 3.0.0 (Unified Vercel Deployment)
 
 Made with ❤️ for students and educators
-
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
