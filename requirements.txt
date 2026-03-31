@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+supabase
+pdfplumber
+python-dotenv
+pydantic
+python-multipart
+groq
