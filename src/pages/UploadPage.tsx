@@ -119,7 +119,7 @@ export const UploadPage = () => {
         setProgress(prev => (prev >= 90 ? 90 : prev + 2))
       }, 400)
 
-      const result = await api.uploadMaterial(selectedFile, user?.id, subjectName, examDate)
+      const result = await api.uploadMaterial(selectedFile, user?.id, subjectName, examDate, user?.email)
       
       clearInterval(interval)
       setProgress(100)

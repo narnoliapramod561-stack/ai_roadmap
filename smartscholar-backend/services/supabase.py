@@ -5,7 +5,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 url: str = os.getenv("SUPABASE_URL")
-key: str = os.getenv("SUPABASE_KEY")
+# Use Service Role Key for backend (full bypass of RLS, administrative access)
+key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
 supabase: Client = None
 if url and key and not url.startswith("your_"):

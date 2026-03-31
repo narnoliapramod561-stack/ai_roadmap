@@ -59,10 +59,11 @@ function handleApiError(response: Response): never {
 }
 
 export const api = {
-  async uploadMaterial(file: File, userId?: string, subjectName: string = '', examDate?: string) {
+  async uploadMaterial(file: File, userId?: string, subjectName: string = '', examDate?: string, userEmail?: string) {
     const formData = new FormData();
     formData.append('file', file);
     if (userId) formData.append('user_id', userId);
+    if (userEmail) formData.append('user_email', userEmail);
     formData.append('subject_name', subjectName);
     if (examDate) formData.append('exam_date', examDate);
 

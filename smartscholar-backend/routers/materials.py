@@ -69,6 +69,7 @@ async def delete_material(material_id: str):
 async def upload_material(
     file: UploadFile = File(...), 
     user_id: Optional[str] = Form(None),
+    user_email: Optional[str] = Form(None),
     subject_name: str = Form(...),
     exam_date: Optional[str] = Form(None)
 ):
@@ -105,19 +106,20 @@ async def upload_material(
         # Ensure user exists first (satisfies user_id FK constraint)
         if norm_user_id:
             try:
-                db.table("users").upsert({"id": norm_user_id}, on_conflict="id").execute()
+                # Use provided email or fallback to a deterministic one to satisfy NOT NULL constraint
+                email = user_email or f"user_{norm_user_id[:8]}@smartscholar.ai"
+                db.table("users").upsert({"id": norm_user_id, "email": email}, on_conflict="id").execute()
             except Exception as ue:
                 print(f"User upsert failed (non-critical): {ue}")
 
         # Build insert payload with actual DB column names
-        # Confirmed columns: id, user_id, filename (NOT NULL), file_name, subject, raw_text, ai_roadmap, knowledge_graph, exam_date
         insert_data = {
             "id": material_id,
             "user_id": norm_user_id,
-            "filename": filename,     # NOT NULL in DB
-            "file_name": filename,    # Also populate alias column
+            "filename": filename,     # Likely NOT NULL in DB
+            "file_name": filename,    # Alias column
             "subject": subject_name,
-            "raw_text": text[:50000], # Limit text size for DB
+            "raw_text": text[:50000],
             "ai_roadmap": analysis_result,
             "knowledge_graph": analysis_result.get("knowledge_graph"),
             "exam_date": exam_date
@@ -128,16 +130,15 @@ async def upload_material(
             print(f"Material saved successfully: {material_id}")
         except Exception as full_err:
             print(f"Full insert failed: {full_err}")
-            error_str = str(full_err).lower()
             
-            # Try progressively simpler inserts
+            # Try progressively simpler inserts but KEEPS user_id if possible
             fallback_attempts = [
                 # Without large JSON fields
                 {"id": material_id, "user_id": norm_user_id, "filename": filename, "file_name": filename, "subject": subject_name, "raw_text": text[:20000], "exam_date": exam_date},
-                # Without user_id (bypass FK)
-                {"id": material_id, "filename": filename, "file_name": filename, "subject": subject_name, "raw_text": text[:10000]},
-                # Bare minimum
-                {"id": material_id, "filename": filename, "raw_text": text[:5000]},
+                # Without exam_date and smaller text
+                {"id": material_id, "user_id": norm_user_id, "filename": filename, "file_name": filename, "subject": subject_name, "raw_text": text[:10000]},
+                # Without user_id (AS LAST RESORT)
+                {"id": material_id, "filename": filename, "file_name": filename, "subject": subject_name, "raw_text": text[:5000]},
             ]
             for attempt_data in fallback_attempts:
                 try:
